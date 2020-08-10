@@ -1,0 +1,5 @@
+(fp_lib_table
+
+  (lib (name "LCSC parts")(type KiCad)(uri "${KIPRJMOD}/LCSC parts.pretty")(options "")(descr ""))
+  (lib (name diyBMS-CurrentShunt)(type KiCad)(uri ${KIPRJMOD}/diyBMS-CurrentShunt.pretty)(options "")(descr ""))
+)

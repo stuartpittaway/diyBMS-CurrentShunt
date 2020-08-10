@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name diyBMS-CurrentShunt-rescue)(type Legacy)(uri ${KIPRJMOD}/diyBMS-CurrentShunt-rescue.lib)(options "")(descr ""))
+  (lib (name diyBMS_project)(type Legacy)(uri ${KIPRJMOD}/diyBMS_project.lib)(options "")(descr ""))
+)
