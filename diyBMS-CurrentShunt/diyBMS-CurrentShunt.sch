@@ -718,48 +718,9 @@ F 6 "CL21C220JBANNNC" H 3085 5525 50  0001 C CNN "MPN"
 	1    0    0    -1  
 $EndComp
 Wire Wire Line
-	3555 5405 3690 5405
-Connection ~ 3555 5405
-Wire Wire Line
-	3690 5405 3690 5245
-Wire Wire Line
-	3420 5405 3555 5405
-Wire Wire Line
-	3420 5245 3420 5405
-$Comp
-L power:GND #PWR0105
-U 1 1 5F194AEF
-P 3555 5405
-F 0 "#PWR0105" H 3555 5155 50  0001 C CNN
-F 1 "GND" H 3560 5232 50  0000 C CNN
-F 2 "" H 3555 5405 50  0001 C CNN
-F 3 "" H 3555 5405 50  0001 C CNN
-	1    3555 5405
-	1    0    0    -1  
-$EndComp
-Wire Wire Line
-	3690 5245 3655 5245
-Wire Wire Line
-	3455 5245 3420 5245
-Wire Wire Line
 	3025 5300 3025 5345
 Wire Wire Line
 	3025 5145 3025 5200
-$Comp
-L Device:Crystal_GND24_Small Y1
-U 1 1 5F17F68A
-P 3555 5245
-F 0 "Y1" V 3509 5389 50  0000 L CNN
-F 1 "12Mhz" V 3600 5389 50  0000 L CNN
-F 2 "Crystals:Crystal_SMD_3225-4pin_3.2x2.5mm" H 3555 5245 50  0001 C CNN
-F 3 "https://datasheet.lcsc.com/szlcsc/Yangxing-Tech-X322512MSB4SI_C9002.pdf" H 3555 5245 50  0001 C CNN
-F 4 "X322512MSB4SI" H 3555 5245 50  0001 C CNN "MPN"
-F 5 "" H 3555 5245 50  0001 C CNN "LCSC"
-F 6 "NO" H 3555 5245 50  0001 C CNN "LCSCExtendedPart"
-F 7 "C9002" H 3555 5245 50  0001 C CNN "LCSCPart"
-	1    3555 5245
-	0    1    1    0   
-$EndComp
 Wire Wire Line
 	3025 5145 3085 5145
 Wire Wire Line
@@ -1559,4 +1520,43 @@ Wire Notes Line
 	6080 4170 6080 6560
 Text Notes 9350 5765 0    50   ~ 0
 120R resistors optional - \nuse through hole part \non screw terminals
+Wire Wire Line
+	3455 5245 3420 5245
+Wire Wire Line
+	3690 5245 3655 5245
+Wire Wire Line
+	3690 5405 3690 5245
+Wire Wire Line
+	3420 5245 3420 5405
+Wire Wire Line
+	3420 5405 3555 5405
+$Comp
+L power:GND #PWR0105
+U 1 1 5F194AEF
+P 3555 5405
+F 0 "#PWR0105" H 3555 5155 50  0001 C CNN
+F 1 "GND" H 3560 5232 50  0000 C CNN
+F 2 "" H 3555 5405 50  0001 C CNN
+F 3 "" H 3555 5405 50  0001 C CNN
+	1    3555 5405
+	1    0    0    -1  
+$EndComp
+Connection ~ 3555 5405
+Wire Wire Line
+	3555 5405 3690 5405
+$Comp
+L Device:Crystal_GND24_Small Y1
+U 1 1 5F17F68A
+P 3555 5245
+F 0 "Y1" V 3509 5389 50  0000 L CNN
+F 1 "12Mhz" V 3600 5389 50  0000 L CNN
+F 2 "Crystals:Crystal_SMD_3225-4pin_3.2x2.5mm" H 3555 5245 50  0001 C CNN
+F 3 "https://datasheet.lcsc.com/szlcsc/Yangxing-Tech-X322512MSB4SI_C9002.pdf" H 3555 5245 50  0001 C CNN
+F 4 "X322512MSB4SI" H 3555 5245 50  0001 C CNN "MPN"
+F 5 "" H 3555 5245 50  0001 C CNN "LCSC"
+F 6 "NO" H 3555 5245 50  0001 C CNN "LCSCExtendedPart"
+F 7 "C9002" H 3555 5245 50  0001 C CNN "LCSCPart"
+	1    3555 5245
+	0    1    1    0   
+$EndComp
 $EndSCHEMATC
