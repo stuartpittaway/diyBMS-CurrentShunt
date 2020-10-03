@@ -1519,10 +1519,10 @@ SENSE-
 Text Label 2175 2135 0    50   ~ 0
 SENSE+
 $Comp
-L Connector:Screw_Terminal_01x04 J?
+L Connector:Screw_Terminal_01x04 J4
 U 1 1 5FA65240
 P 2895 1935
-F 0 "J?" H 2840 2185 50  0000 L CNN
+F 0 "J4" H 2840 2185 50  0000 L CNN
 F 1 "Screw_Terminal_01x04" V 3145 1585 50  0001 L CNN
 F 2 "LCSC parts:Terminal-Block_3.81_4P_LCSC_C395880" H 2895 1935 50  0001 C CNN
 F 3 "~" H 2895 1935 50  0001 C CNN
