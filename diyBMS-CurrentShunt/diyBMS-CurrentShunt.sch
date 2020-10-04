@@ -60,7 +60,7 @@ $EndComp
 Wire Wire Line
 	1830 2885 1830 2855
 Wire Wire Line
-	1830 2855 2015 2855
+	1830 2855 1915 2855
 Connection ~ 2015 2855
 Wire Wire Line
 	2015 2855 2015 2905
@@ -165,44 +165,44 @@ Wire Wire Line
 Wire Wire Line
 	3955 2905 4055 2905
 Wire Notes Line
-	1410 1075 4605 1075
+	1405 970  4600 970 
 Wire Notes Line
-	1405 1710 1405 1075
-Text Notes 1735 1460 0    197  ~ 0
+	1400 1605 1400 970 
+Text Notes 1730 1355 0    197  ~ 0
 SHUNT  50mv FS
 Wire Notes Line
-	4040 1715 4040 1860
+	4035 1610 4035 1755
 Wire Notes Line
-	4040 1860 4295 1860
+	4035 1755 4290 1755
 Wire Notes Line
-	4295 1860 4295 1710
+	4290 1755 4290 1605
 Wire Notes Line
-	1890 1715 1890 1860
+	1885 1610 1885 1755
 Wire Notes Line
-	1890 1860 2145 1860
+	1890 1760 2145 1760
 Wire Notes Line
-	2145 1860 2145 1710
+	2140 1755 2140 1605
 Wire Notes Line
-	1405 1710 4605 1710
-Text Notes 2480 1860 0    79   ~ 0
+	1400 1605 4600 1605
+Text Notes 2475 1755 0    79   ~ 0
 Kelvin Connections
 Wire Notes Line
-	1400 1210 1185 1210
+	1395 1105 1180 1105
 Wire Notes Line
-	1185 1210 1185 1550
+	1180 1105 1180 1445
 Wire Notes Line
-	1185 1550 1405 1550
+	1180 1445 1400 1445
 Wire Notes Line
-	4615 1210 4800 1210
+	4610 1105 4795 1105
 Wire Notes Line
-	4800 1210 4800 1555
+	4795 1105 4795 1450
 Wire Notes Line
-	4800 1555 4605 1555
+	4795 1450 4600 1450
 Wire Notes Line
-	4605 1075 4605 1710
-Text Notes 3820 995  0    79   ~ 0
+	4600 970  4600 1605
+Text Notes 3815 890  0    79   ~ 0
 To battery pack +ve
-Text Notes 1205 1020 0    79   ~ 0
+Text Notes 1200 915  0    79   ~ 0
 To LOAD
 $Comp
 L Device:Polyfuse F1
@@ -594,31 +594,27 @@ $EndComp
 Wire Wire Line
 	2020 2705 2155 2705
 Wire Notes Line
-	2025 1935 2910 1935
-Wire Notes Line
 	2910 1935 2910 1940
 Wire Notes Line
-	2025 1915 2025 1935
+	2015 1780 2015 1800
 Wire Notes Line
-	1995 1915 2060 1915
+	1985 1780 2050 1780
 Wire Notes Line
-	2060 1915 2060 1905
+	2050 1780 2050 1770
 Wire Notes Line
-	2060 1905 1995 1905
+	2050 1770 1985 1770
 Wire Notes Line
-	1995 1905 1995 1915
+	1985 1770 1985 1780
 Wire Notes Line
-	4175 1935 3190 1935
+	4170 1810 4170 1790
 Wire Notes Line
-	4175 1935 4175 1915
+	4140 1795 4140 1780
 Wire Notes Line
-	4145 1920 4145 1905
+	4140 1780 4190 1780
 Wire Notes Line
-	4145 1905 4195 1905
+	4190 1780 4190 1795
 Wire Notes Line
-	4195 1905 4195 1920
-Wire Notes Line
-	4145 1920 4195 1920
+	4140 1795 4190 1795
 $Comp
 L Device:C C10
 U 1 1 5F0353C9
@@ -813,23 +809,23 @@ $EndComp
 $Comp
 L power:+BATT #PWR0131
 U 1 1 5F11A8F2
-P 3765 2175
-F 0 "#PWR0131" H 3765 2025 50  0001 C CNN
-F 1 "+BATT" H 3780 2348 50  0000 C CNN
-F 2 "" H 3765 2175 50  0001 C CNN
-F 3 "" H 3765 2175 50  0001 C CNN
-	1    3765 2175
+P 3290 2095
+F 0 "#PWR0131" H 3290 1945 50  0001 C CNN
+F 1 "+BATT" H 3305 2268 50  0000 C CNN
+F 2 "" H 3290 2095 50  0001 C CNN
+F 3 "" H 3290 2095 50  0001 C CNN
+	1    3290 2095
 	1    0    0    -1  
 $EndComp
 $Comp
 L power:GND #PWR0108
 U 1 1 5F0D0DF9
-P 3040 2260
-F 0 "#PWR0108" H 3040 2010 50  0001 C CNN
-F 1 "GND" H 2925 2155 50  0000 C CNN
-F 2 "" H 3040 2260 50  0001 C CNN
-F 3 "" H 3040 2260 50  0001 C CNN
-	1    3040 2260
+P 3095 2265
+F 0 "#PWR0108" H 3095 2015 50  0001 C CNN
+F 1 "GND" H 2980 2160 50  0000 C CNN
+F 2 "" H 3095 2265 50  0001 C CNN
+F 3 "" H 3095 2265 50  0001 C CNN
+	1    3095 2265
 	1    0    0    -1  
 $EndComp
 Text Notes 2625 2230 0    39   ~ 0
@@ -861,13 +857,13 @@ Text Label 2755 5600 0    50   ~ 0
 PC1
 Text Label 2755 5500 0    50   ~ 0
 PC0
-Text Label 780  7040 2    50   ~ 0
-PC0
-Text Label 780  7140 2    50   ~ 0
-PC1
-Text Label 780  7240 2    50   ~ 0
-PC2
 Text Label 780  7540 2    50   ~ 0
+PC0
+Text Label 780  7440 2    50   ~ 0
+PC1
+Text Label 780  7340 2    50   ~ 0
+PC2
+Text Label 780  7240 2    50   ~ 0
 PC3
 $Comp
 L power:GND #PWR0132
@@ -972,9 +968,9 @@ Wire Wire Line
 	9160 5410 9160 6150
 NoConn ~ 2755 6600
 NoConn ~ 2755 6800
-Text GLabel 780  7440 0    47   Input Italic 0
+Text GLabel 780  7140 0    47   Input Italic 0
 SDA
-Text GLabel 780  7340 0    47   Input Italic 0
+Text GLabel 780  7040 0    47   Input Italic 0
 SCL
 $Comp
 L Device:C C15
@@ -1054,7 +1050,7 @@ L MCU_Microchip_ATmega:ATmega328-AU U2
 U 1 1 5F0C4A18
 P 2155 5800
 F 0 "U2" H 2165 5120 79  0000 C CNB
-F 1 "ATmega328-AU" V 1410 5740 79  0000 C CNB
+F 1 "ATMEGA328P-AU" V 1410 5740 79  0000 C CNB
 F 2 "Housings_QFP:TQFP-32_7x7mm_Pitch0.8mm" H 2155 5800 50  0001 C CIN
 F 3 "http://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-7810-Automotive-Microcontrollers-ATmega328P_Datasheet.pdf" H 2155 5800 50  0001 C CNN
 F 4 "YES" H 2155 5800 50  0001 C CNN "LCSCExtendedPart"
@@ -1160,17 +1156,6 @@ F 4 "YES" H 1680 2495 50  0001 C CNN "LCSCExtendedPart"
 F 5 "C13832" H 1680 2495 50  0001 C CNN "LCSCPart"
 F 6 "CL31B105KCHNNNE" H 1680 2495 50  0001 C CNN "MPN"
 	1    1680 2495
-	1    0    0    -1  
-$EndComp
-$Comp
-L power:GND #PWR04
-U 1 1 5F3B619A
-P 1680 2645
-F 0 "#PWR04" H 1680 2395 50  0001 C CNN
-F 1 "GND" H 1685 2472 50  0000 C CNN
-F 2 "" H 1680 2645 50  0001 C CNN
-F 3 "" H 1680 2645 50  0001 C CNN
-	1    1680 2645
 	1    0    0    -1  
 $EndComp
 Wire Wire Line
@@ -1322,7 +1307,7 @@ F 3 "" H 7125 2550 50  0001 C CNN
 	1    0    0    -1  
 $EndComp
 Wire Wire Line
-	7125 2450 7125 2550
+	7125 2450 7125 2495
 Wire Wire Line
 	7125 2150 7275 2150
 $Comp
@@ -1527,18 +1512,6 @@ Wire Wire Line
 	2020 2225 2020 2345
 Wire Wire Line
 	2795 2135 2795 2175
-Wire Wire Line
-	2795 2175 3765 2175
-Wire Wire Line
-	3040 2260 3040 2135
-Wire Wire Line
-	3040 2135 2995 2135
-Wire Wire Line
-	3040 2135 3095 2135
-Connection ~ 3040 2135
-Connection ~ 3765 2175
-Wire Wire Line
-	3765 2175 4170 2175
 Text Label 3580 5000 0    50   ~ 0
 MISO
 Text Label 3470 4900 0    50   ~ 0
@@ -1647,12 +1620,38 @@ Text Label 4810 7535 2    50   ~ 0
 PB1
 Text Label 4815 7855 2    50   ~ 0
 PB2
-Text Label 2840 6900 0    50   ~ 0
+Text Label 3125 6900 0    50   ~ 0
 PD6
-Text Label 2820 7000 0    50   ~ 0
+Text Label 2965 7000 0    50   ~ 0
 PD7
 Text Label 3300 7540 2    50   ~ 0
 PD6
 Text Label 3140 7830 2    50   ~ 0
 PD7
+Wire Wire Line
+	3095 2265 3095 2135
+Wire Wire Line
+	2795 2175 4170 2175
+Wire Wire Line
+	2995 2135 2995 2160
+Wire Wire Line
+	2995 2160 3290 2160
+Wire Wire Line
+	3290 2160 3290 2095
+Wire Wire Line
+	7675 2550 7195 2550
+Wire Wire Line
+	7195 2550 7195 2495
+Wire Wire Line
+	7195 2495 7125 2495
+Connection ~ 7125 2495
+Wire Wire Line
+	7125 2495 7125 2550
+Wire Wire Line
+	1680 2645 1915 2645
+Wire Wire Line
+	1915 2645 1915 2855
+Connection ~ 1915 2855
+Wire Wire Line
+	1915 2855 2015 2855
 $EndSCHEMATC
