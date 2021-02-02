@@ -1,0 +1,16 @@
+﻿Part,Manufacturer,Part Number,Quantity,Price ($),Footprint (mm²),Description
+Cout,MuRata,GRM21BR60J226ME39L,2,0.1,6.75,Cap: 22 µF  Total Derated Cap: 23 µF  VDC: 6.3 V  ESR: 9 mΩ  Package: 0805  
+Rr,Vishay-Dale,CRCW0805715KFKEA,1,0.01,6.75,Resistance: 715 kΩ  Tolerance: 1.0%  Power: 125 mW  
+Cr,Kemet,C0603C302K5GACTU,1,0.09,4.68,Cap: 3 nF  Total Derated Cap: 3 nF  VDC: 50 V  ESR: 0 Ω  Package: 0603  
+Cac,Samsung Electro-Mechanics,CL32C103JBFNNNE,1,0.79,14.7,Cap: 10 nF  Total Derated Cap: 10 nF  VDC: 5 V  ESR: 0 Ω  Package: 1210  
+Rfbb,Vishay-Dale,CRCW040231K6FKED,1,0.01,3,Resistance: 31.6 kΩ  Tolerance: 1.0%  Power: 63 mW  
+Ron,Yageo,RC0201FR-7D562KL,1,0.01,2.08,Resistance: 562 kΩ  Tolerance: 1.0%  Power: 50 mW  
+L1,TDK,SLF7045T-102MR14-PF,1,0.45,81,L: 1 mH  DCR: 2.28 Ω  IDC: 140 mA  
+Cin,TDK,C3216X7R2A105M160AA,1,0.12,10.92,Cap: 1 µF  Total Derated Cap: 270 nF  VDC: 100 V  ESR: 7.5 mΩ  Package: 1206  
+U1,Texas Instruments,LM5009MM/NOPB,1,0.968,23.6,
+Rilim,Yageo,RC0201FR-07133KL,1,0.01,2.08,Resistance: 133 kΩ  Tolerance: 1.0%  Power: 50 mW  
+Rfbt,Yageo,RC0201FR-0710KL,1,0.01,2.08,Resistance: 10 kΩ  Tolerance: 1.0%  Power: 50 mW  
+Cinx,TDK,C2012X7T2E104K125AA,1,0.06,6.75,Cap: 100 nF  Total Derated Cap: 60 nF  VDC: 250 V  ESR: 1 mΩ  Package: 0805  
+D1,Diodes Inc.,B1100LB-13-F,1,0.09,44.16,Type: Schottky  VRRM: 100 V  Io: 1 A  
+Cbyp,Kemet,C0805C105K4RACTU,1,0.02,6.75,Cap: 1 µF  Total Derated Cap: 1 µF  VDC: 16 V  ESR: 15 mΩ  Package: 0805  
+Cb,MuRata,GRM155R71H103KA88D,1,0.01,3,Cap: 10 nF  Total Derated Cap: 9.5 nF  VDC: 50 V  ESR: 1 mΩ  Package: 0402  
