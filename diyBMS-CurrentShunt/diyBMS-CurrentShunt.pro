@@ -1,4 +1,4 @@
-update=27/07/2020 15:34:37
+update=01/02/2021 12:26:29
 version=1
 last_client=kicad
 [general]
@@ -239,6 +239,7 @@ dPairGap=0.25
 dPairViaGap=0.25
 [schematic_editor]
 version=1
+PageLayoutDescrFile=
 PlotDirectoryName=printfiles/
 SubpartIdSeparator=0
 SubpartFirstId=65

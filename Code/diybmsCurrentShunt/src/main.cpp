@@ -1,78 +1,114 @@
 #include <Arduino.h>
-#include<avr/wdt.h> /* Header for watchdog timers in AVR */
-#include <Wire.h>
-#include "LTC2944.h"
 
-const unsigned int fullCapacity = 240; // Maximum value is 22000 mAh
+#include <MCP2515.h>
 
-LTC2944 gauge(50); // Takes R_SENSE value (in milliohms) as constructor argument, can be omitted if using CJMCU-294
+MCP2515 mcp2515(10);
 
-void setup() {
-  wdt_disable();
-  wdt_reset();
-  wdt_enable(WDTO_4S);
+MCP2515::ERROR err;
 
-  // put your setup code here, to run once:
-  pinMode(PD6,OUTPUT);
-  pinMode(PD7,OUTPUT);
+struct can_frame canMsg1;
+struct can_frame canMsg2;
 
-  //Flash both LEDS on power up
-  for (size_t i = 0; i < 20; i++)
-  {
-    digitalWrite(PD6,HIGH);
-    digitalWrite(PD7,HIGH);
-    delay(50);
-    digitalWrite(PD6,LOW);
-    digitalWrite(PD7,LOW);
-    delay(50);
-  }
-  
+void setup()
+{
+  SPI.begin();
 
-  Wire.begin();
+  canMsg1.can_id = 0x0F6;
+  canMsg1.can_dlc = 8;
+  canMsg1.data[0] = 1;
+  canMsg1.data[1] = 2;
+  canMsg1.data[2] = 3;
+  canMsg1.data[3] = 4;
+  canMsg1.data[4] = 5;
+  canMsg1.data[5] = 6;
+  canMsg1.data[6] = 7;
+  canMsg1.data[7] = 8;
+  /*
+  canMsg2.can_id = 0x036;
+  canMsg2.can_dlc = 8;
+  canMsg2.data[0] = 0x0E;
+  canMsg2.data[1] = 0x00;
+  canMsg2.data[2] = 0x00;
+  canMsg2.data[3] = 0x08;
+  canMsg2.data[4] = 0x01;
+  canMsg2.data[5] = 0x00;
+  canMsg2.data[6] = 0x00;
+  canMsg2.data[7] = 0xA0;
+*/
+  //pinMode(13, OUTPUT);
 
-  while (gauge.begin() == false) {
-    wdt_reset();
-    //Flash blue LED slowly - bad news
-    digitalWrite(PD7,HIGH);
-    delay(500);
-    digitalWrite(PD7,LOW);
-    delay(500);
-  }
+  pinMode(PB0, OUTPUT);
+  pinMode(5, OUTPUT);
+  Serial.begin(115200, SERIAL_8N1);
 
-  gauge.setBatteryCapacity(fullCapacity);
-  gauge.setBatteryToFull(); // Sets accumulated charge registers to the maximum value
-  gauge.setADCMode(ADC_MODE_SLEEP); // In sleep mode, voltage and temperature measurements will only take place when requested
-  gauge.startMeasurement();
+  err = mcp2515.reset();
+  Serial.println(err);
+  err = mcp2515.setBitrate(CAN_125KBPS, MCP_16MHZ);
+  Serial.println(err);
+  err = mcp2515.setNormalMode();
+  //err = mcp2515.setLoopbackMode();
+  Serial.println(err);
+
+  Serial.println(F("Start up"));
 }
 
-void loop() {
-  wdt_reset();
+void dumpByte(uint8_t data)
+{
+  if (data <= 0x0F)
+  {
+    Serial.print('0');
+  }
+  Serial.print(data, HEX);
+}
 
-  // put your main code here, to run repeatedly:
-  digitalWrite(PD6,HIGH);
-  unsigned int raw = gauge.getRawAccumulatedCharge();
-  Serial.print(F("Raw Accumulated Charge: "));
-  Serial.println(raw, DEC);
+void loop()
+{
+  canMsg1.data[0]++;
+  err = mcp2515.sendMessage(&canMsg1);
+  Serial.print(err);
+  Serial.print(' ');
+  //err = mcp2515.sendMessage(&canMsg2);
+  //Serial.print(err);
+  //Serial.print(',');
 
-  float capacity = gauge.getRemainingCapacity();
-  Serial.print(F("Battery Capacity: "));
-  Serial.print(capacity, 3);
-  Serial.print(F(" / "));
-  Serial.print(fullCapacity, DEC);
-  Serial.println(F(" mAh"));
+  if (err == 0)
+  {
+    digitalWrite(5, HIGH);
+    delay(100);
+    digitalWrite(5, LOW);
+  }
+  else
+  {
+    Serial.print(" reset ");
+  
+    err = mcp2515.reset();
+    Serial.print(err);
+    err = mcp2515.setBitrate(CAN_125KBPS, MCP_16MHZ);
+    Serial.print(err);
+    err = mcp2515.setNormalMode();
+    Serial.println(err);
+  
+  }
+/*
+  if (mcp2515.checkReceive())
+  {
+    err = mcp2515.readMessage(&canMsg2);
 
-  float voltage = gauge.getVoltage();
-  Serial.print(F("Voltage: "));
-  Serial.print(voltage, 3);
-  Serial.println(F(" V"));
+    if (err == 0)
+    {
 
-  float temperature = gauge.getTemperature();
-  Serial.print(F("Temperature: "));
-  Serial.print(temperature, 2);
-  Serial.println(F(" 'C"));
+      Serial.printf("ID is %d=", canMsg2.can_id);
+      //if (!(canMsg2.flags & CAN_MSG_FLAG_RTR))
+      //{
+      for (int i = 0; i < canMsg2.can_dlc; i++)
+      {
+        dumpByte(canMsg2.data[i]);
+      }
+      //}
+      Serial.println();
+    }
+  }
+  */
 
-  Serial.println();
-
-  digitalWrite(PD6,LOW);
-  delay(2000);  
+  delay(5000);
 }
