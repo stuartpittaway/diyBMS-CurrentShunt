@@ -1,0 +1,36 @@
+﻿Name,Value,Category,Description
+D1 Pd,29.17 mW,Diode,Output Diode Power Dissipation
+Vout,5 V,System Information,Operational Output Voltage
+IC Tolerance,50 mV,IC,IC Feedback Tolerance
+Cin IRMS,11.93 mA,Capacitor,Input capacitor RMS ripple current
+Cin Pd,504.32 nW,Capacitor,Input capacitor power dissipation
+Cout IRMS,26.37 mA,Capacitor,Output capacitor RMS ripple current
+Cout Pd,2.11 µW,Capacitor,Output capacitor power dissipation
+Duty Cycle,6.06%,System Information,Duty cycle
+Frequency,53.09 kHz,System Information,Switching frequency
+IC Tj,62.2 °C,IC,IC junction temperature
+ICThetaJA,40 °C/W,IC,IC junction-to-ambient thermal resistance
+L Ipp,91.33 mA,Inductor,Peak-to-peak inductor ripple current
+L Pd,7.13 mW,Inductor,Inductor power dissipation
+IC Pd,55.06 mW,IC,IC power dissipation
+Pout,250 mW,System Information,Total output power
+Iin Avg,3.67 mA,IC,Average input current
+IC Ipk,95.67 mA,IC,Peak switch current in IC
+Mode,CCM,System Information,Conduction Mode
+Vout p-p,277.38 µV,System Information,Peak-to-peak output ripple voltage
+M Vds Act,15.52 mV,Mosfet,Voltage drop across the MosFET
+M Irms,12.31 mA,Mosfet,MOSFET RMS current
+Total Pd,91.36 mW,Power,Total Power Dissipation
+Efficiency,73.2%,System Information,Steady state efficiency
+FootPrint,NA,System Information,Total Foot Print Area of BOM components
+D1 Pd,29.17 mW,Power,Output Diode Power Dissipation
+Vin,85 V,System Information,Vin operating point
+Iout,50 mA,System Information,Iout operating point
+Cin Pd,504.32 nW,Power,Input capacitor power dissipation
+Cout Pd,2.11 µW,Power,Output capacitor power dissipation
+L Pd,7.13 mW,Power,Inductor power dissipation
+IC Pd,55.06 mW,Power,IC power dissipation
+BOM Count,6 ,System Information,Total Design BOM count
+Vout Actual,5 V,System Information,Vout Actual calculated based on selected voltage divider resistors
+Vout Tolerance,3.03%,System Information,Vout Tolerance based on IC Tolerance (no load) and voltage divider resistors if applicable
+Total BOM,NA,System Information,Total BOM Cost

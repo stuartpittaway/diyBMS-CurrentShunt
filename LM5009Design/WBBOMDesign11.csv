@@ -1,0 +1,16 @@
+﻿Part,Manufacturer,Part Number,Quantity,Price ($),Footprint (mm²),Description
+Cout,MuRata,GRM32ER61C476KE15L,1,0.38,14.7,Cap: 47 µF  Total Derated Cap: 32 µF  VDC: 16 V  ESR: 3.04 mΩ  Package: 1210  
+Rr,CUSTOM,CUSTOM,1,NA,NA,Resistance: 470 kΩ  Tolerance: 1.0%  Power: 250 mW  
+Cr,AVX,08053A332JAT2A,1,0.07,6.75,Cap: 3.3 nF  Total Derated Cap: 3.3 nF  VDC: 25 V  ESR: 0 Ω  Package: 0805  
+Cac,Samsung Electro-Mechanics,CL32C103JBFNNNE,1,0.79,14.7,Cap: 10 nF  Total Derated Cap: 10 nF  VDC: 5 V  ESR: 0 Ω  Package: 1210  
+Rfbb,Yageo,RC0201FR-0710KL,1,0.01,2.08,Resistance: 10 kΩ  Tolerance: 1.0%  Power: 50 mW  
+Ron,CUSTOM,CUSTOM,1,NA,NA,Resistance: 680 kΩ  Tolerance: 1.0%  Power: 50 mW  
+L1,TDK,SLF7045T-102MR14-PF,1,0.45,81,L: 1 mH  DCR: 2.28 Ω  IDC: 140 mA  
+Cin,MuRata,GRM55DR72E105KW01L,2,0.54,53.9,Cap: 1 µF  Total Derated Cap: 1.2 µF  VDC: 250 V  ESR: 7.09 mΩ  Package: 2220  
+U1,Texas Instruments,LM5009AMM/NOPB,1,0.968,23.6,
+Rilim,CUSTOM,CUSTOM,1,NA,NA,Resistance: 150 kΩ  Tolerance: 1.0%  Power: 50 mW  
+Rfbt,Yageo,RC0201FR-0710KL,1,0.01,2.08,Resistance: 10 kΩ  Tolerance: 1.0%  Power: 50 mW  
+Cinx,TDK,C2012X7T2E104K125AA,1,0.06,6.75,Cap: 100 nF  Total Derated Cap: 56 nF  VDC: 250 V  ESR: 1 mΩ  Package: 0805  
+D1,Diodes Inc.,RS1G-13-F,1,0.07,37.34,Type: Ultrafast  VRRM: 400 V  Io: 1 A  
+Cbyp,Kemet,C0805C105K4RACTU,1,0.02,6.75,Cap: 1 µF  Total Derated Cap: 1 µF  VDC: 16 V  ESR: 15 mΩ  Package: 0805  
+Cb,MuRata,GRM155R71H103KA88D,1,0.01,3,Cap: 10 nF  Total Derated Cap: 9.5 nF  VDC: 50 V  ESR: 1 mΩ  Package: 0402  
