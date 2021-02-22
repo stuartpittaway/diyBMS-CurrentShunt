@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name CurrentShuntLib)(type Legacy)(uri ${KIPRJMOD}/CurrentShuntLib.lib)(options "")(descr ""))
+)

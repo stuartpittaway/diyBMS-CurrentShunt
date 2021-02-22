@@ -1,0 +1,9 @@
+EESchema-DOCLIB  Version 2.0
+#
+$CMP LM5009A
+D LM5009A 100-V, 150-mA Constant ON-Time Buck Switching Regulator
+K Step-Down Switching Regulator
+F https://www.ti.com/lit/ds/symlink/lm5009a.pdf
+$ENDCMP
+#
+#End Doc Library
