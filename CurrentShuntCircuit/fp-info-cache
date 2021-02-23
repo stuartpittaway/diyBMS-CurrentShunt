@@ -1,4 +1,4 @@
-18993138752056714
+18994772289190862
 Battery
 BatteryHolder_Bulgin_BX0036_1xC
 Bulgin Battery Holder, BX0036, Battery Type C (https://www.bulgin.com/products/pub/media/bulgin/data/Battery_holders.pdf)
@@ -48769,12 +48769,19 @@ THT ceramic resonator filter DSS6
 3
 3
 CurrentShuntCircuit
-FL-15 DC Shunt
-
-
+Murata-3020-0110X-0
+200A/300A/500A 50mV DC Shunt
+Shunt
 0
-2
-1
+0
+0
+CurrentShuntCircuit
+Murata-3020-01101-0
+150A 50mV DC Shunt
+Shunt
+0
+0
+0
 CurrentShuntCircuit
 Terminal-Block_3.81_2P-LCSC_C395878
 
