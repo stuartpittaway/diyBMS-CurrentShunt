@@ -2,7 +2,7 @@
 
   (general
     (thickness 1.6)
-    (drawings 58)
+    (drawings 60)
     (tracks 433)
     (zones 0)
     (modules 54)
@@ -2121,6 +2121,12 @@
     )
   )
 
+  (gr_text "The INA228-Q1 is an ultra-precise digital power\nmonitor with 20-bit delta-sigma ADC specifically\ndesigned for current-sensing applications. The device\ncan measure a full-scale differential input of ±163.84\nmV or ±40.96 mV across a resistive shunt sense\nelement with common-mode voltage support from\n–0.3 V to +85 V." (at 185.2 65.3) (layer B.SilkS) (tstamp 60363CEF)
+    (effects (font (size 1.2 1.2) (thickness 0.2)) (justify mirror))
+  )
+  (gr_text "24 Feb 2021" (at 217.2 99.25) (layer F.SilkS) (tstamp 60363A91)
+    (effects (font (size 1.2 1.2) (thickness 0.2)))
+  )
   (gr_text JLCJLCJLCJLC (at 151.75 128.8) (layer F.SilkS)
     (effects (font (size 1 1) (thickness 0.1)))
   )
@@ -2708,7 +2714,7 @@
   (segment (start 165.24 122.8) (end 165.24 121.71) (width 0.25) (layer F.Cu) (net 39))
   (segment (start 165.24 121.71) (end 166.8 120.15) (width 0.25) (layer F.Cu) (net 39))
 
-  (zone (net 1) (net_name GND) (layer B.Cu) (tstamp 603776F9) (hatch edge 0.508)
+  (zone (net 1) (net_name GND) (layer B.Cu) (tstamp 60364062) (hatch edge 0.508)
     (connect_pads (clearance 0.508))
     (min_thickness 0.254)
     (fill yes (arc_segments 32) (thermal_gap 0.508) (thermal_bridge_width 0.508) (smoothing fillet) (radius 4))
@@ -3363,7 +3369,7 @@
       )
     )
   )
-  (zone (net 1) (net_name GND) (layer F.Cu) (tstamp 603776F6) (hatch edge 0.508)
+  (zone (net 1) (net_name GND) (layer F.Cu) (tstamp 6036405F) (hatch edge 0.508)
     (connect_pads (clearance 0.508))
     (min_thickness 0.254)
     (fill yes (arc_segments 32) (thermal_gap 0.508) (thermal_bridge_width 0.508) (smoothing fillet) (radius 4))

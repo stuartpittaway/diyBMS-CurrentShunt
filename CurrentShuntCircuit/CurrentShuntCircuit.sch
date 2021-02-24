@@ -1273,4 +1273,6 @@ F 5 "0805W8F4700T5E" H 4620 5990 50  0001 C CNN "PartNumber"
 $EndComp
 Wire Wire Line
 	4105 5990 4470 5990
+Text Notes 5940 2425 0    47   ~ 0
+Note 100V caps on input
 $EndSCHEMATC
