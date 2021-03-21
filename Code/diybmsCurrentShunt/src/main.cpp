@@ -1,114 +1,139 @@
 #include <Arduino.h>
+#include <avr/sleep.h>
+#include <avr/power.h>
+#include <avr/wdt.h>
+#include "EmbeddedFiles_Defines.h"
 
-#include <MCP2515.h>
+//MODBUS Protocol
+//https://www.ni.com/en-gb/innovations/white-papers/14/the-modbus-protocol-in-depth.html
+//#define RX_BUFFER_SIZE 64
 
-MCP2515 mcp2515(10);
+#define GREENLED_PIN_BITMAP PIN7_bm
+#define REDLED_PIN_BITMAP PIN6_bm
 
-MCP2515::ERROR err;
+volatile bool wdt_triggered = false;
+volatile uint16_t wdt_triggered_count;
 
-struct can_frame canMsg1;
-struct can_frame canMsg2;
+void ConfigurePorts()
+{
+
+  // PA6 = RED LED
+  // PA7 = GREEN LED
+  PORTA.DIRSET = GREENLED_PIN_BITMAP | REDLED_PIN_BITMAP;
+
+  // Set Port B digital outputs
+  // PB2 = TX (has to be set as output on tiny1614)
+  PORTB.DIRSET = PIN2_bm;
+
+  // Set RX as input (PB3)
+  PORTB.DIRCLR = PIN3_bm;
+
+  //PORTA.DIRCLR = PIN3_bm | PIN4_bm | PIN7_bm;
+}
+
+void RedLED(bool value)
+{
+  if (value)
+  {
+    PORTA.OUTSET = REDLED_PIN_BITMAP;
+  }
+  else
+  {
+    PORTA.OUTCLR = REDLED_PIN_BITMAP;
+  }
+}
+
+void GreenLED(bool value)
+{
+  if (value)
+  {
+    PORTA.OUTSET = GREENLED_PIN_BITMAP;
+  }
+  else
+  {
+    PORTA.OUTCLR = GREENLED_PIN_BITMAP;
+  }
+}
+
+void EnableWatchdog()
+{
+  wdt_triggered = false;
+
+  // Setup a watchdog timer for 2 seconds
+  CCP = 0xD8;
+
+  //2 seconds
+  WDT.CTRLA = WDT_PERIOD_enum::WDT_PERIOD_4KCLK_gc;
+  //WDT.CTRLA = WDT_PERIOD_enum::WDT_PERIOD_128CLK_gc;
+
+  wdt_reset();
+}
+
+void DisableSerial0TX()
+{
+  //On tiny1614 this saves about 10mA of current
+  USART0.CTRLB &= ~(USART_TXEN_bm); /* Transmitter Enable bit mask. */
+}
+
+void EnableSerial0TX()
+{
+  //When the transmitter is disabled, it will no longer override the TXD pin, and the pin
+  //direction is automatically set as input by hardware, even if it was configured as output by the user
+  PORTB.DIRSET = PIN2_bm;
+  USART0.CTRLB |= USART_TXEN_bm; /* Transmitter Enable bit mask. */
+}
+
+void WatchdogTriggered()
+{
+  // This is the watchdog timer - something went wrong and no serial activity received in over 8 seconds
+  wdt_triggered = true;
+  wdt_triggered_count++;
+}
 
 void setup()
 {
-  SPI.begin();
-
-  canMsg1.can_id = 0x0F6;
-  canMsg1.can_dlc = 8;
-  canMsg1.data[0] = 1;
-  canMsg1.data[1] = 2;
-  canMsg1.data[2] = 3;
-  canMsg1.data[3] = 4;
-  canMsg1.data[4] = 5;
-  canMsg1.data[5] = 6;
-  canMsg1.data[6] = 7;
-  canMsg1.data[7] = 8;
-  /*
-  canMsg2.can_id = 0x036;
-  canMsg2.can_dlc = 8;
-  canMsg2.data[0] = 0x0E;
-  canMsg2.data[1] = 0x00;
-  canMsg2.data[2] = 0x00;
-  canMsg2.data[3] = 0x08;
-  canMsg2.data[4] = 0x01;
-  canMsg2.data[5] = 0x00;
-  canMsg2.data[6] = 0x00;
-  canMsg2.data[7] = 0xA0;
-*/
-  //pinMode(13, OUTPUT);
-
-  pinMode(PB0, OUTPUT);
-  pinMode(5, OUTPUT);
-  Serial.begin(115200, SERIAL_8N1);
-
-  err = mcp2515.reset();
-  Serial.println(err);
-  err = mcp2515.setBitrate(CAN_125KBPS, MCP_16MHZ);
-  Serial.println(err);
-  err = mcp2515.setNormalMode();
-  //err = mcp2515.setLoopbackMode();
-  Serial.println(err);
-
-  Serial.println(F("Start up"));
-}
-
-void dumpByte(uint8_t data)
-{
-  if (data <= 0x0F)
+  //Did we have a watchdog reboot?
+  if (RSTCTRL.RSTFR & RSTCTRL_WDRF_bm)
   {
-    Serial.print('0');
+    // Must be first line of code
+    WatchdogTriggered();
   }
-  Serial.print(data, HEX);
+  else
+  {
+    wdt_triggered_count = 0;
+  }
+
+  ConfigurePorts();
+
+  for (size_t i = 0; i < 25; i++)
+  {
+    GreenLED(true);
+    if (wdt_triggered)
+    {
+      RedLED(true);
+    }
+    delay(50);
+    GreenLED(false);
+    if (wdt_triggered)
+    {
+      RedLED(false);
+    }
+    delay(150);
+  }
+
+  EnableWatchdog();
+
+  Serial.begin(115200, SERIAL_8N1);
 }
 
 void loop()
 {
-  canMsg1.data[0]++;
-  err = mcp2515.sendMessage(&canMsg1);
-  Serial.print(err);
-  Serial.print(' ');
-  //err = mcp2515.sendMessage(&canMsg2);
-  //Serial.print(err);
-  //Serial.print(',');
+  wdt_reset();
 
-  if (err == 0)
-  {
-    digitalWrite(5, HIGH);
-    delay(100);
-    digitalWrite(5, LOW);
-  }
-  else
-  {
-    Serial.print(" reset ");
-  
-    err = mcp2515.reset();
-    Serial.print(err);
-    err = mcp2515.setBitrate(CAN_125KBPS, MCP_16MHZ);
-    Serial.print(err);
-    err = mcp2515.setNormalMode();
-    Serial.println(err);
-  
-  }
-/*
-  if (mcp2515.checkReceive())
-  {
-    err = mcp2515.readMessage(&canMsg2);
-
-    if (err == 0)
-    {
-
-      Serial.printf("ID is %d=", canMsg2.can_id);
-      //if (!(canMsg2.flags & CAN_MSG_FLAG_RTR))
-      //{
-      for (int i = 0; i < canMsg2.can_dlc; i++)
-      {
-        dumpByte(canMsg2.data[i]);
-      }
-      //}
-      Serial.println();
-    }
-  }
-  */
-
-  delay(5000);
+  GreenLED(false);
+  RedLED(false);
+  delay(1000);
+  GreenLED(true);
+  RedLED(true);
+  delay(1000);
 }
