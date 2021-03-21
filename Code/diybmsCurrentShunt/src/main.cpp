@@ -10,6 +10,7 @@
 
 #define GREENLED_PIN_BITMAP PIN7_bm
 #define REDLED_PIN_BITMAP PIN6_bm
+#define RELAY_PIN_BITMAP PIN5_bm
 
 volatile bool wdt_triggered = false;
 volatile uint16_t wdt_triggered_count;
@@ -17,9 +18,15 @@ volatile uint16_t wdt_triggered_count;
 void ConfigurePorts()
 {
 
+  // PA1 = SDA
+  // PA2 = SCL
+  // PA3 = Baud Rate
+  // PA4 = Modbus Address
+  // PA5 = RELAY OUTPUT
   // PA6 = RED LED
   // PA7 = GREEN LED
-  PORTA.DIRSET = GREENLED_PIN_BITMAP | REDLED_PIN_BITMAP;
+  // Outputs
+  PORTA.DIRSET = GREENLED_PIN_BITMAP | REDLED_PIN_BITMAP | RELAY_PIN_BITMAP;
 
   // Set Port B digital outputs
   // PB2 = TX (has to be set as output on tiny1614)
