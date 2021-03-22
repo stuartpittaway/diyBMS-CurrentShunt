@@ -1277,4 +1277,10 @@ Text Notes 5940 2425 0    47   ~ 0
 Note 100V caps on input
 Text Notes -100 3285 0    197  ~ 0
 CONSIDER HIGH AND LOW SIDE MONITOR\nSPLIT VOLTAGE SENSE INPUT TO ANOTHER PIN!
+Text GLabel 9370 4985 2    50   Input ~ 0
+VDD2
+Text GLabel 9145 5330 1    50   Input ~ 0
+A
+Text GLabel 9075 5700 2    50   Input ~ 0
+B
 $EndSCHEMATC
