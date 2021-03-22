@@ -310,12 +310,12 @@ void ConfigureI2C()
     i2c_error();
   }
 
-  //Conversion times for all inputs to 540 µs
-  //Continuous bus, shunt voltage and temperature
-  //64 times sample averaging
-  // B1111 101 101 101 011
+  //Conversion times for voltage and current = 2074us
+  //temperature = 540us
+  //256 times sample averaging
+  // B1111 110 110 100 101
   //                   AVG
-  const uint16_t adc_value = 0xFB6B;
+  const uint16_t adc_value = 0xFDA5;
 
   if (!i2c_writeword(INA_REGISTER::ADC_CONFIG, adc_value))
   {
@@ -329,7 +329,12 @@ void ConfigureI2C()
 
   //For 150A/50mV shunt = 13107200000 x 0.000286102294921875 x 0.00033333 x4 (for ADCRANGE = 40.96mV)  = 4999.994999617707
   //Rounded up to 5000
-  const uint16_t shuntcal_value = (uint16_t)(round((double)13107200000 * (double)0.000286102294921875 * (double)0.00033333 * (double)4));
+  //const uint16_t shuntcal_value = (uint16_t)(round((double)13107200000 * (double)0.000286102294921875 * (double)0.00033333 * (double)4));
+
+  // Scale at ±40.96 mV not 50mV
+  // CurrentLSB = (0.05/150) * 0.8192 = 0.0002730666666
+
+  const uint16_t shuntcal_value = 3650;
 
 #ifdef DIYBMS_DEBUG
   debugSerial.println(shuntcal_value);
@@ -394,14 +399,17 @@ void setup()
   ConfigureI2C();
 }
 
-#ifdef DIYBMS_DEBUG
-uint16_t loopCount = 0;
-#endif
-
 uint32_t RawBusVoltage()
 {
   //Bus voltage output. Two's complement value, however always positive.  Value in bits 23 to 4
   return (i2c_readUint32(INA_REGISTER::VBUS) & (uint32_t)0xFFFFF0) >> 4;
+}
+
+uint32_t RawCurrent()
+{
+  //Current.
+  //Calculated current output in Amperes. Two's complement value.
+  return (i2c_readUint32(INA_REGISTER::CURRENT) & (uint32_t)0xFFFFF0) >> 4;
 }
 
 void loop()
@@ -416,16 +424,15 @@ void loop()
   //195.3125uV per LSB
   double voltage = ((double)RawBusVoltage() * (double)195.3125) / 1000000;
 
+  //150Amp shunt
+  double CURRENT_LSB = (double)150.0 / (double)0x80000;
+  double current = ((double)RawCurrent() * (double)195.3125) / 1000000;
+
 #ifdef DIYBMS_DEBUG
   //debugSerial.print('#');
 
-  debugSerial.println(voltage, 6);
-
-  if (loopCount % 48 == 0)
-  {
-    debugSerial.println();
-  }
-
-  loopCount++;
+  debugSerial.print(voltage, 6);
+  debugSerial.print("   ");
+  debugSerial.println(current, 6);
 #endif
 }
