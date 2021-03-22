@@ -51,10 +51,33 @@ SendOnlySoftwareSerial debugSerial(0); // Tx pin
 #define RELAY_PIN_BITMAP PIN5_bm
 
 const uint8_t INA228_I2C_Address{B1000000};
-const uint8_t INA_REGISTER_CONFIG{0}; ///< Configuration Register address
-const uint8_t INA_REGISTER_MANUFACTURER_ID{0xFE};
-const uint8_t INA_REGISTER_DIE_ID{0xFF};
-const uint16_t INA_RESET_DEVICE{0x8000};
+
+enum INA_REGISTER : uint8_t
+{
+  CONFIG = 0,
+  ADC_CONFIG = 1,
+  SHUNT_CAL = 2,    //Shunt Calibration
+  SHUNT_TEMPCO = 3, //Shunt Temperature Coefficient
+  VSHUNT = 4,       //Shunt Voltage Measurement 24bit
+  VBUS = 5,         //Bus Voltage Measurement 24bit
+  DIETEMP = 6,
+  CURRENT = 7,   //Current Result 24bit
+  POWER = 8,     //Power Result 24bit
+  ENERGY = 9,    //Energy Result 40bit
+  CHARGE = 0x0A, //Charge Result 40bit
+  DIAG_ALRT = 0x0b,
+  SOVL = 0x0c, //Shunt Overvoltage Threshold
+  SUVL = 0x0d, //Shunt Undervoltage Threshold
+  BOVL = 0x0e, //Bus Overvoltage Threshold
+  BUVL = 0x0f, //Bus Undervoltage Threshold
+  TEMP_LIMIT = 0x10,
+  PWR_LIMIT = 0x11,
+  MANUFACTURER_ID = 0xFE,
+  DIE_ID = 0xFF
+};
+
+//const uint16_t INA_RESET_DEVICE{0x8000};
+const uint16_t INA_RESET_DEVICE{_BV(15)};
 
 void RedLED(bool value);
 void GreenLED(bool value);
@@ -62,7 +85,6 @@ void GreenLED(bool value);
 volatile bool wdt_triggered = false;
 volatile uint16_t wdt_triggered_count;
 
-/*
 ISR(PORTB_PORT_vect)
 {
   if (PORTB.INTFLAGS && PIN1_bm)
@@ -75,7 +97,6 @@ ISR(PORTB_PORT_vect)
   //Reset interrupt
   PORTB.INTFLAGS = 0xFF;
 }
-*/
 
 void ConfigurePorts()
 {
@@ -98,9 +119,11 @@ void ConfigurePorts()
   // PB3 = RX
   // Set pins as Outputs (other pins are inputs)
   PORTB.DIR = PIN0_bm | PIN2_bm;
-  //PORTB.PIN1CTRL=PORT_PULLUPEN_bm | PORT_ISC_enum::PORT_ISC_FALLING_gc;
+  PORTB.PIN1CTRL = PORT_PULLUPEN_bm | PORT_ISC_enum::PORT_ISC_FALLING_gc;
   //PORTB.PIN1CTRL = PORT_ISC_enum::PORT_ISC_FALLING_gc;
-  //SREG = 0b10000000;
+
+  //Enable interrupts
+  sei();
 }
 
 // Read the jumper pins
@@ -207,6 +230,22 @@ int16_t i2c_readword(const uint8_t inareg)
   return ((uint16_t)Wire.read() << 8) | Wire.read();
 }
 
+uint32_t i2c_readUint32(const uint8_t inareg)
+{
+  Wire.beginTransmission(INA228_I2C_Address);
+  Wire.write(inareg);
+  Wire.endTransmission();
+  delayMicroseconds(10);
+  Wire.requestFrom(INA228_I2C_Address, (uint8_t)3); // Request 2 bytes
+
+  //reply += (uint8_t)Wire.read() << 24;
+  uint32_t reply = (uint32_t)Wire.read() << 16;
+  reply += (uint32_t)Wire.read() << 8;
+  reply += (uint32_t)Wire.read();
+
+  return reply;
+}
+
 void i2c_error()
 {
   //Halt here with an error, i2c comms with INA228 failed
@@ -214,7 +253,6 @@ void i2c_error()
 #ifdef DIYBMS_DEBUG
   debugSerial.println("I2C Error");
 #endif
-
 
   for (size_t i = 0; i < 100; i++)
   {
@@ -235,39 +273,69 @@ void ConfigureI2C()
   Wire.begin();
   //Change TWI pins to use PA1/PA2 and not PB1/PB0
   Wire.swap(1);
+  //Use fast i2c
   Wire.setClock(400000);
 
-  Wire.beginTransmission(INA228_I2C_Address); // transmit to device #8
-  uint8_t result = Wire.endTransmission();
-
-  if (result > 0)
+  //See if the device is connected/soldered on board
+  Wire.beginTransmission(INA228_I2C_Address); // transmit to device
+  if (Wire.endTransmission() > 0)
   {
     i2c_error();
   }
 
-  //Now we know the INA228 is alive and connected, set it up
-  if (!i2c_writeword(INA_REGISTER_CONFIG, INA_RESET_DEVICE))
+  //Now we know the INA228 is connected, reset to defaults
+  if (!i2c_writeword(INA_REGISTER::CONFIG, INA_RESET_DEVICE))
   {
     i2c_error();
   }
 
   //Get the INA chip model number (make sure we are dealing with an INA228)
 
-  //Clear lower 3 bits, holds version/chip revision
-  int16_t dieid = i2c_readword(INA_REGISTER_DIE_ID);
-
-#ifdef DIYBMS_DEBUG
-  debugSerial.println(dieid, HEX);
-#endif
-
+  //Clear lower 4 bits, holds chip revision (zero in my case)
+  int16_t dieid = i2c_readword(INA_REGISTER::DIE_ID);
   dieid = (dieid & 0xFFF0) >> 4;
-
-#ifdef DIYBMS_DEBUG
-  debugSerial.println(dieid, HEX);
-#endif
-
   //INA228 chip
   if (dieid != 0x228)
+  {
+#ifdef DIYBMS_DEBUG
+    debugSerial.println(dieid, HEX);
+#endif
+    i2c_error();
+  }
+
+  const uint16_t value = _BV(4); //Enable ADCRANGE = 40.96mV scale
+
+  if (!i2c_writeword(INA_REGISTER::CONFIG, value))
+  {
+    i2c_error();
+  }
+
+  //Conversion times for all inputs to 540 µs
+  //Continuous bus, shunt voltage and temperature
+  //64 times sample averaging
+  // B1111 101 101 101 011
+  //                   AVG
+  const uint16_t adc_value = 0xFB6B;
+
+  if (!i2c_writeword(INA_REGISTER::ADC_CONFIG, adc_value))
+  {
+    i2c_error();
+  }
+
+  //2 power of 19 = 524288 = 0x80000
+  // 150 / 524288 = 0.000286102294921875
+  // RSHUNT = 0.00033333
+  //SHUNT_CAL = 13107200000 x CURRENT_LSB x RSHUNT x4 (for ADCRANGE = 40.96mV)
+
+  //For 150A/50mV shunt = 13107200000 x 0.000286102294921875 x 0.00033333 x4 (for ADCRANGE = 40.96mV)  = 4999.994999617707
+  //Rounded up to 5000
+  const uint16_t shuntcal_value = (uint16_t)(round((double)13107200000 * (double)0.000286102294921875 * (double)0.00033333 * (double)4));
+
+#ifdef DIYBMS_DEBUG
+  debugSerial.println(shuntcal_value);
+#endif
+
+  if (!i2c_writeword(INA_REGISTER::SHUNT_CAL, shuntcal_value))
   {
     i2c_error();
   }
@@ -330,6 +398,12 @@ void setup()
 uint16_t loopCount = 0;
 #endif
 
+uint32_t RawBusVoltage()
+{
+  //Bus voltage output. Two's complement value, however always positive.  Value in bits 23 to 4
+  return (i2c_readUint32(INA_REGISTER::VBUS) & (uint32_t)0xFFFFF0) >> 4;
+}
+
 void loop()
 {
   wdt_reset();
@@ -339,8 +413,13 @@ void loop()
   GreenLED(true);
   delay(250);
 
+  //195.3125uV per LSB
+  double voltage = ((double)RawBusVoltage() * (double)195.3125) / 1000000;
+
 #ifdef DIYBMS_DEBUG
-  debugSerial.print('#');
+  //debugSerial.print('#');
+
+  debugSerial.println(voltage, 6);
 
   if (loopCount % 48 == 0)
   {
