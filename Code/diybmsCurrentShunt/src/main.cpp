@@ -235,7 +235,12 @@ int16_t i2c_readword(const uint8_t inareg)
   Wire.endTransmission();
   delayMicroseconds(10);
   Wire.requestFrom(INA228_I2C_Address, (uint8_t)2); // Request 2 bytes
-  return ((uint16_t)Wire.read() << 8) | Wire.read();
+
+  uint8_t a, b, c;
+  a = Wire.read();
+  b = Wire.read();
+
+  return ((uint16_t)a << 8) | b;
 }
 
 uint32_t i2c_readUint24(const uint8_t inareg)
@@ -246,9 +251,14 @@ uint32_t i2c_readUint24(const uint8_t inareg)
   delayMicroseconds(10);
   Wire.requestFrom(INA228_I2C_Address, (uint8_t)3); // Request 3 bytes
 
-  uint32_t reply = (uint32_t)Wire.read() << 16;
-  reply += (uint32_t)Wire.read() << 8;
-  reply += (uint32_t)Wire.read();
+  uint8_t a, b, c;
+  a = Wire.read();
+  b = Wire.read();
+  c = Wire.read();
+
+  uint32_t reply = (uint32_t)a << 16;
+  reply += (uint32_t)b << 8;
+  reply += (uint32_t)c;
 
   return reply;
 }
@@ -275,12 +285,6 @@ uint64_t i2c_readUint40(const uint8_t inareg)
   d = Wire.read();
   e = Wire.read();
 
-  dumpByte(a);
-  dumpByte(b);
-  dumpByte(c);
-  dumpByte(d);
-  dumpByte(e);
-
   uint64_t reply = (uint64_t)a << 32;
   reply += (uint64_t)b << 24;
   reply += (uint64_t)c << 16;
@@ -288,6 +292,34 @@ uint64_t i2c_readUint40(const uint8_t inareg)
   reply += (uint64_t)e;
 
   return reply;
+}
+
+int64_t i2c_readInt40(const uint8_t inareg)
+{
+  Wire.beginTransmission(INA228_I2C_Address);
+  Wire.write(inareg);
+  Wire.endTransmission();
+  delayMicroseconds(10);
+  Wire.requestFrom(INA228_I2C_Address, (uint8_t)5); // Request 5 bytes
+
+  uint8_t a, b, c, d, e;
+  a = Wire.read();
+  b = Wire.read();
+  c = Wire.read();
+  d = Wire.read();
+  e = Wire.read();
+
+  //Check if a twos compliment negative number
+  uint64_t reply = (a & 0x80) ? (uint64_t)0xFFFFFF0000000000 : 0;
+
+  reply += (uint64_t)a << 32;
+  reply += (uint64_t)b << 24;
+  reply += (uint64_t)c << 16;
+  reply += (uint64_t)d << 8;
+  reply += (uint64_t)e;
+
+  //Cast to signed integer
+  return (int64_t)reply;
 }
 
 //Read a 24 bit (3 byte) TWOS COMPLIMENT integer
@@ -536,7 +568,7 @@ void loop()
   debugSerial.print("mV   ");
   debugSerial.println(temperature, 6);
 
-  //Calculated energy output. Output value is in Joules.Unsigned representation. Positive value.
+  //Calculated energy output. Output value is in Joules. Unsigned representation. Positive value.
   debugSerial.print("Energy=");
   uint64_t energy = i2c_readUint40(INA_REGISTER::ENERGY);
   double energy_joules = 16.0 * 3.2 * CURRENT_LSB * (uint32_t)energy;
@@ -546,8 +578,8 @@ void loop()
 
   //Calculated charge output. Output value is in Coulombs. Two's complement value
   debugSerial.print("  Charge=");
-  uint64_t charge = i2c_readUint40(INA_REGISTER::CHARGE);
-  double charge_coulombs = CURRENT_LSB * (uint32_t)charge;
+  int64_t charge = i2c_readInt40(INA_REGISTER::CHARGE);
+  double charge_coulombs = CURRENT_LSB * (int32_t)charge;
   debugSerial.print(" ");
   debugSerial.print(charge_coulombs, 6);
   debugSerial.print("C ");
