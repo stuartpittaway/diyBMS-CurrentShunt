@@ -50,6 +50,13 @@ SendOnlySoftwareSerial debugSerial(0); // Tx pin
 #define REDLED_PIN_BITMAP PIN6_bm
 #define RELAY_PIN_BITMAP PIN5_bm
 
+//150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
+const double shunt_max_current = 150.0;
+const double shunt_millivolt = 50.0;
+const double full_scale_current = shunt_max_current / shunt_millivolt * 40.96;
+const double CURRENT_LSB = full_scale_current / (double)0x80000;
+const double RSHUNT = (shunt_millivolt / 1000.0) / shunt_max_current;
+
 const uint8_t INA228_I2C_Address{B1000000};
 
 enum INA_REGISTER : uint8_t
@@ -322,19 +329,12 @@ void ConfigureI2C()
     i2c_error();
   }
 
-  //2 power of 19 = 524288 = 0x80000
-  // 150 / 524288 = 0.000286102294921875
-  // RSHUNT = 0.00033333
-  //SHUNT_CAL = 13107200000 x CURRENT_LSB x RSHUNT x4 (for ADCRANGE = 40.96mV)
 
-  //For 150A/50mV shunt = 13107200000 x 0.000286102294921875 x 0.00033333 x4 (for ADCRANGE = 40.96mV)  = 4999.994999617707
-  //Rounded up to 5000
-  //const uint16_t shuntcal_value = (uint16_t)(round((double)13107200000 * (double)0.000286102294921875 * (double)0.00033333 * (double)4));
+  // SHUNT_CAL = 13107.2x10^6  x CURRENT_LSB x RSHUNT
+  // SHUNT_CAL must be multiplied by 4 for ADCRANGE = 1
+  uint16_t shuntcal_value = (uint16_t)((double)13107200000.0 * CURRENT_LSB * RSHUNT * (double)4.0);
 
-  // Scale at ±40.96 mV not 50mV
-  // CurrentLSB = (0.05/150) * 0.8192 = 0.0002730666666
-
-  const uint16_t shuntcal_value = 3650;
+  //shuntcal_value+=300;
 
 #ifdef DIYBMS_DEBUG
   debugSerial.println(shuntcal_value);
@@ -405,6 +405,15 @@ uint32_t RawBusVoltage()
   return (i2c_readUint32(INA_REGISTER::VBUS) & (uint32_t)0xFFFFF0) >> 4;
 }
 
+int16_t RawDieTemperature()
+{
+  //The INA228 device has an internal temperature sensor which can measure die temperature from –40 °C to +125
+  //°C. The accuracy of the temperature sensor is ±2 °C across the operational temperature range. The temperature
+  //value is stored inside the DIETEMP register and can be read through the digital interface
+  //Internal die temperature measurement. Two's complement value. Conversion factor: 7.8125 m°C/LSB
+  return i2c_readword(INA_REGISTER::DIETEMP);
+}
+
 uint32_t RawCurrent()
 {
   //Current.
@@ -424,15 +433,18 @@ void loop()
   //195.3125uV per LSB
   double voltage = ((double)RawBusVoltage() * (double)195.3125) / 1000000;
 
-  //150Amp shunt
-  double CURRENT_LSB = (double)150.0 / (double)0x80000;
-  double current = ((double)RawCurrent() * (double)195.3125) / 1000000;
+  //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
+  double current = ((double)RawCurrent() * CURRENT_LSB); // / 1000000;
+
+  double temperature = RawDieTemperature() * (double)7.8125 / 1000.0;
 
 #ifdef DIYBMS_DEBUG
   //debugSerial.print('#');
 
   debugSerial.print(voltage, 6);
   debugSerial.print("   ");
-  debugSerial.println(current, 6);
+  debugSerial.print(current, 6);
+  debugSerial.print("   ");
+  debugSerial.println(temperature, 6);
 #endif
 }
