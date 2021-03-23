@@ -244,12 +244,48 @@ uint32_t i2c_readUint24(const uint8_t inareg)
   Wire.write(inareg);
   Wire.endTransmission();
   delayMicroseconds(10);
-  Wire.requestFrom(INA228_I2C_Address, (uint8_t)3); // Request 2 bytes
+  Wire.requestFrom(INA228_I2C_Address, (uint8_t)3); // Request 3 bytes
 
-  //reply += (uint8_t)Wire.read() << 24;
   uint32_t reply = (uint32_t)Wire.read() << 16;
   reply += (uint32_t)Wire.read() << 8;
   reply += (uint32_t)Wire.read();
+
+  return reply;
+}
+
+void dumpByte(uint8_t data)
+{
+  if (data <= 0x0F)
+    debugSerial.print('0');
+  debugSerial.print(data, HEX);
+}
+
+uint64_t i2c_readUint40(const uint8_t inareg)
+{
+  Wire.beginTransmission(INA228_I2C_Address);
+  Wire.write(inareg);
+  Wire.endTransmission();
+  delayMicroseconds(10);
+  Wire.requestFrom(INA228_I2C_Address, (uint8_t)5); // Request 5 bytes
+
+  uint8_t a, b, c, d, e;
+  a = Wire.read();
+  b = Wire.read();
+  c = Wire.read();
+  d = Wire.read();
+  e = Wire.read();
+
+  dumpByte(a);
+  dumpByte(b);
+  dumpByte(c);
+  dumpByte(d);
+  dumpByte(e);
+
+  uint64_t reply = (uint64_t)a << 32;
+  reply += (uint64_t)b << 24;
+  reply += (uint64_t)c << 16;
+  reply += (uint64_t)d << 8;
+  reply += (uint64_t)e;
 
   return reply;
 }
@@ -457,7 +493,11 @@ double DieTemperature()
   //°C. The accuracy of the temperature sensor is ±2 °C across the operational temperature range. The temperature
   //value is stored inside the DIETEMP register and can be read through the digital interface
   //Internal die temperature measurement. Two's complement value. Conversion factor: 7.8125 m°C/LSB
-  return (double)i2c_readword(INA_REGISTER::DIETEMP) * (double)7.8125 / (double)1000.0;
+
+  //Case unsigned to int16 to cope with negative temperatures
+  int16_t dietemp = i2c_readword(INA_REGISTER::DIETEMP);
+
+  return dietemp * (double)7.8125 / (double)1000.0;
 }
 
 double Current()
@@ -476,11 +516,11 @@ void loop()
   GreenLED(true);
   delay(250);
 
-  double voltage = 0; //BusVoltage();
+  double voltage = BusVoltage();
   //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
   double current = Current();
-  double temperature = 0; //DieTemperature();
-  double power = 0;       //Power();
+  double temperature = DieTemperature();
+  double power = Power();
   double shuntv = ShuntVoltage();
 
 #ifdef DIYBMS_DEBUG
@@ -495,5 +535,22 @@ void loop()
   debugSerial.print(shuntv, 6);
   debugSerial.print("mV   ");
   debugSerial.println(temperature, 6);
+
+  //Calculated energy output. Output value is in Joules.Unsigned representation. Positive value.
+  debugSerial.print("Energy=");
+  uint64_t energy = i2c_readUint40(INA_REGISTER::ENERGY);
+  double energy_joules = 16.0 * 3.2 * CURRENT_LSB * (uint32_t)energy;
+  debugSerial.print(" ");
+  debugSerial.print(energy_joules, 6);
+  debugSerial.print("J ");
+
+  //Calculated charge output. Output value is in Coulombs. Two's complement value
+  debugSerial.print("  Charge=");
+  uint64_t charge = i2c_readUint40(INA_REGISTER::CHARGE);
+  double charge_coulombs = CURRENT_LSB * (uint32_t)charge;
+  debugSerial.print(" ");
+  debugSerial.print(charge_coulombs, 6);
+  debugSerial.print("C ");
+  debugSerial.println();
 #endif
 }
