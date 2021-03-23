@@ -116,7 +116,7 @@ $EndComp
 Wire Wire Line
 	2445 2240 2240 2240
 Wire Wire Line
-	2740 1935 3085 1935
+	2740 1935 2840 1935
 Wire Wire Line
 	3085 1935 3085 1990
 Wire Wire Line
@@ -126,7 +126,7 @@ Wire Wire Line
 Wire Wire Line
 	3085 2090 3085 2240
 Wire Wire Line
-	3085 2240 2745 2240
+	3085 2240 2840 2240
 Text Notes 675  1355 0    50   ~ 0
 VIN- = Negative input to the device. \nhigh-side:connect to load side of sense resistor. \n\nVIN+ = Positive input to the device. \nhigh-side: connect to power supply side of sense resistor\n
 Text Notes 655  2320 0    118  ~ 0
@@ -185,15 +185,6 @@ Wire Wire Line
 Connection ~ 4030 1640
 Wire Wire Line
 	4030 1640 4030 1690
-Wire Wire Line
-	2240 1935 2370 1935
-Wire Wire Line
-	2370 1935 2370 1590
-Wire Wire Line
-	2370 1590 3230 1590
-Connection ~ 2370 1935
-Wire Wire Line
-	2370 1935 2440 1935
 $Comp
 L Relay_SolidState:ASSR-1218 U1
 U 1 1 60348748
@@ -359,26 +350,26 @@ F 6 "C17470" H 7745 2545 50  0001 C CNN "LCSCStockCode"
 	1    0    0    -1  
 $EndComp
 $Comp
-L Connector:Screw_Terminal_01x02 J4
+L Connector:Screw_Terminal_01x04 J4
 U 1 1 60366551
-P 6790 1265
-F 0 "J4" H 6790 1070 50  0000 C CNN
-F 1 "ScrewTerminal" H 7270 1205 50  0000 C CNN
-F 2 "CurrentShuntCircuit:Terminal-Block_3.81_2P-LCSC_C395878" H 6790 1265 50  0001 C CNN
-F 3 "https://datasheet.lcsc.com/szlcsc/1912111437_DIBO-DB125-3-81-2P-GN_C395878.pdf" H 6790 1265 50  0001 C CNN
-F 4 "C395878" H 6790 1265 50  0001 C CNN "LCSCStockCode"
-	1    6790 1265
+P 6620 1300
+F 0 "J4" H 6620 1105 50  0000 C CNN
+F 1 "Screw_Terminal_01x04" H 7100 1240 50  0000 C CNN
+F 2 "CurrentShuntCircuit:Terminal-Block_3.81_4P_LCSC_C395880" H 6620 1300 50  0001 C CNN
+F 3 "" H 6620 1300 50  0001 C CNN
+F 4 "C395880" H 6620 1300 50  0001 C CNN "LCSCStockCode"
+	1    6620 1300
 	-1   0    0    1   
 $EndComp
 $Comp
 L power:GND #PWR08
 U 1 1 6036808B
-P 6990 1265
-F 0 "#PWR08" H 6990 1015 50  0001 C CNN
-F 1 "GND" H 6995 1092 50  0000 C CNN
-F 2 "" H 6990 1265 50  0001 C CNN
-F 3 "" H 6990 1265 50  0001 C CNN
-	1    6990 1265
+P 6820 1400
+F 0 "#PWR08" H 6820 1150 50  0001 C CNN
+F 1 "GND" H 6825 1227 50  0000 C CNN
+F 2 "" H 6820 1400 50  0001 C CNN
+F 3 "" H 6820 1400 50  0001 C CNN
+	1    6820 1400
 	1    0    0    -1  
 $EndComp
 $Comp
@@ -395,31 +386,31 @@ $EndComp
 $Comp
 L power:+BATT #PWR09
 U 1 1 60368C54
-P 7590 1165
-F 0 "#PWR09" H 7590 1015 50  0001 C CNN
-F 1 "+BATT" H 7605 1338 50  0000 C CNN
-F 2 "" H 7590 1165 50  0001 C CNN
-F 3 "" H 7590 1165 50  0001 C CNN
-	1    7590 1165
+P 7420 1100
+F 0 "#PWR09" H 7420 950 50  0001 C CNN
+F 1 "+BATT" H 7565 1135 50  0000 C CNN
+F 2 "" H 7420 1100 50  0001 C CNN
+F 3 "" H 7420 1100 50  0001 C CNN
+	1    7420 1100
 	1    0    0    -1  
 $EndComp
 $Comp
 L Device:Polyfuse F1
 U 1 1 6036C4B0
-P 7290 1165
-F 0 "F1" V 7065 1165 50  0000 C CNN
-F 1 "Through Hole PTC" V 7156 1165 50  0000 C CNN
-F 2 "Fuse:Fuse_BelFuse_0ZRE0005FF_L8.3mm_W3.8mm" H 7340 965 50  0001 L CNN
-F 3 "https://datasheet.lcsc.com/szlcsc/1912111437_Jinrui-Electronic-Materials-Co-JK250-120U_C369130.pdf" H 7290 1165 50  0001 C CNN
-F 4 "C2680606" H 7290 1165 50  0001 C CNN "LCSCStockCode"
-F 5 "JK250-100U" H 7290 1165 50  0001 C CNN "PartNumber"
-	1    7290 1165
+P 7120 1100
+F 0 "F1" V 6895 1100 50  0000 C CNN
+F 1 "Through Hole PTC" V 6986 1100 50  0000 C CNN
+F 2 "Fuse:Fuse_BelFuse_0ZRE0005FF_L8.3mm_W3.8mm" H 7170 900 50  0001 L CNN
+F 3 "https://datasheet.lcsc.com/szlcsc/1912111437_Jinrui-Electronic-Materials-Co-JK250-120U_C369130.pdf" H 7120 1100 50  0001 C CNN
+F 4 "C2680606" H 7120 1100 50  0001 C CNN "LCSCStockCode"
+F 5 "JK250-100U" H 7120 1100 50  0001 C CNN "PartNumber"
+	1    7120 1100
 	0    1    1    0   
 $EndComp
 Wire Wire Line
-	7440 1165 7590 1165
+	7270 1100 7420 1100
 Wire Wire Line
-	7140 1165 6990 1165
+	6970 1100 6820 1100
 $Comp
 L power:+BATT #PWR010
 U 1 1 6036E410
@@ -1275,12 +1266,49 @@ Wire Wire Line
 	4105 5990 4470 5990
 Text Notes 5940 2425 0    47   ~ 0
 Note 100V caps on input
-Text Notes -100 3285 0    197  ~ 0
-CONSIDER HIGH AND LOW SIDE MONITOR\nSPLIT VOLTAGE SENSE INPUT TO ANOTHER PIN!
 Text GLabel 9370 4985 2    50   Input ~ 0
 VDD2
 Text GLabel 9145 5330 1    50   Input ~ 0
 A
 Text GLabel 9075 5700 2    50   Input ~ 0
 B
+$Comp
+L Device:C C14
+U 1 1 605A1F4C
+P 2840 2085
+F 0 "C14" H 2940 2085 50  0000 L CNN
+F 1 "100nF 100V" H 2840 1990 50  0000 L CNN
+F 2 "Capacitor_SMD:C_0805_2012Metric" H 2878 1935 50  0001 C CNN
+F 3 "https://datasheet.lcsc.com/szlcsc/2008131833_KEMET-C0805C104K1RECAUTO_C696367.pdf" H 2840 2085 50  0001 C CNN
+F 4 "" H 2840 2085 50  0001 C CNN "JLC"
+F 5 "C0805C104K1RECAUTO" H 2840 2085 50  0001 C CNN "PartNumber"
+F 6 "C696367" H 2840 2085 50  0001 C CNN "LCSCStockCode"
+	1    2840 2085
+	1    0    0    -1  
+$EndComp
+Connection ~ 2840 1935
+Wire Wire Line
+	2840 1935 3085 1935
+Wire Wire Line
+	2840 2240 2840 2235
+Connection ~ 2840 2240
+Wire Wire Line
+	2840 2240 2745 2240
+Text Notes 2485 2405 0    47   ~ 0
+Note 100V caps on input
+Text GLabel 3080 1590 1    59   Input ~ 0
+BUSVOLTAGE
+Wire Wire Line
+	2240 1935 2440 1935
+Wire Wire Line
+	3080 1590 3230 1590
+Wire Wire Line
+	6820 1300 6890 1300
+Wire Wire Line
+	6890 1300 6890 1400
+Wire Wire Line
+	6890 1400 6820 1400
+Connection ~ 6820 1400
+Text GLabel 6820 1200 2    59   Input ~ 0
+BUSVOLTAGE
 $EndSCHEMATC
