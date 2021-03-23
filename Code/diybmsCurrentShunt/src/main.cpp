@@ -92,13 +92,14 @@ void GreenLED(bool value);
 volatile bool wdt_triggered = false;
 volatile uint16_t wdt_triggered_count;
 
+volatile bool i = false;
 ISR(PORTB_PORT_vect)
 {
   if (PORTB.INTFLAGS && PIN1_bm)
   {
     //INA228 has triggered an ALERT interrupt
-
-    RedLED(true);
+    i = !i;
+    RedLED(i);
   }
 
   //Reset interrupt
@@ -237,7 +238,7 @@ int16_t i2c_readword(const uint8_t inareg)
   return ((uint16_t)Wire.read() << 8) | Wire.read();
 }
 
-uint32_t i2c_readUint32(const uint8_t inareg)
+uint32_t i2c_readUint24(const uint8_t inareg)
 {
   Wire.beginTransmission(INA228_I2C_Address);
   Wire.write(inareg);
@@ -251,6 +252,21 @@ uint32_t i2c_readUint32(const uint8_t inareg)
   reply += (uint32_t)Wire.read();
 
   return reply;
+}
+
+//Read a 24 bit (3 byte) TWOS COMPLIMENT integer
+int32_t i2c_readInt24(const uint8_t inareg)
+{
+  uint32_t value = (i2c_readUint24(inareg) & (uint32_t)0xFFFFF0) >> 4;
+
+  //Is the signed bit set (bit 20)
+  if (value & 0x80000UL)
+  {
+    //Set bits 24 to 32 to indicate negative number (twos compliment)
+    value |= 0xfff00000UL;
+  }
+
+  return (int32_t)value;
 }
 
 void i2c_error()
@@ -320,27 +336,40 @@ void ConfigureI2C()
   //Conversion times for voltage and current = 2074us
   //temperature = 540us
   //256 times sample averaging
+
+  // 1111 = Continuous bus, shunt voltage and temperature
+  // 110 = 6h = 2074 µs BUS VOLT
+  // 110 = 6h = 2074 µs CURRENT
+  // 100 = 4h = 540 µs TEMPERATURE
+  // 101 = 5h = 256 ADC sample averaging count
   // B1111 110 110 100 101
   //                   AVG
-  const uint16_t adc_value = 0xFDA5;
+  const uint16_t adc_config_value = 0xFDA5;
 
-  if (!i2c_writeword(INA_REGISTER::ADC_CONFIG, adc_value))
+  if (!i2c_writeword(INA_REGISTER::ADC_CONFIG, adc_config_value))
   {
     i2c_error();
   }
 
-
   // SHUNT_CAL = 13107.2x10^6  x CURRENT_LSB x RSHUNT
   // SHUNT_CAL must be multiplied by 4 for ADCRANGE = 1
-  uint16_t shuntcal_value = (uint16_t)((double)13107200000.0 * CURRENT_LSB * RSHUNT * (double)4.0);
+  uint16_t shunt_cal_value = (uint16_t)((double)13107200000.0 * CURRENT_LSB * RSHUNT * (double)4.0);
 
   //shuntcal_value+=300;
-
+  //Top 2 bits are not used
+  shunt_cal_value = shunt_cal_value & 0x3FFF;
 #ifdef DIYBMS_DEBUG
-  debugSerial.println(shuntcal_value);
+  debugSerial.println(shunt_cal_value);
 #endif
 
-  if (!i2c_writeword(INA_REGISTER::SHUNT_CAL, shuntcal_value))
+  if (!i2c_writeword(INA_REGISTER::SHUNT_CAL, shunt_cal_value))
+  {
+    i2c_error();
+  }
+
+  //CNVR = Setting this bit high configures the Alert pin to be asserted when the Conversion Ready Flag (bit 1) is asserted, indicating that a conversion cycle has completed
+  const uint16_t diag_alrt_value = 0; //_BV(14);
+  if (!i2c_writeword(INA_REGISTER::DIAG_ALRT, diag_alrt_value))
   {
     i2c_error();
   }
@@ -399,26 +428,43 @@ void setup()
   ConfigureI2C();
 }
 
-uint32_t RawBusVoltage()
+double BusVoltage()
 {
   //Bus voltage output. Two's complement value, however always positive.  Value in bits 23 to 4
-  return (i2c_readUint32(INA_REGISTER::VBUS) & (uint32_t)0xFFFFF0) >> 4;
+  //195.3125uV per LSB
+  return (double)195.3125 * (double)i2c_readInt24(INA_REGISTER::VBUS) / 1000000.0;
 }
 
-int16_t RawDieTemperature()
+double ShuntVoltage()
+{
+  //Shunt voltage in MILLIVOLTS mV (Two's complement value)
+  //78.125 nV/LSB
+  return (double)78.125 * (double)i2c_readInt24(INA_REGISTER::VSHUNT) / 1e+6;
+}
+
+double Power()
+{
+  //Calculated power output.
+  //Output value in watts.
+  //Unsigned representation. Positive value.
+  //POWER Power [W] = 3.2 x CURRENT_LSB x POWER
+  return (double)i2c_readUint24(INA_REGISTER::POWER) * (double)3.2 * CURRENT_LSB;
+}
+
+double DieTemperature()
 {
   //The INA228 device has an internal temperature sensor which can measure die temperature from –40 °C to +125
   //°C. The accuracy of the temperature sensor is ±2 °C across the operational temperature range. The temperature
   //value is stored inside the DIETEMP register and can be read through the digital interface
   //Internal die temperature measurement. Two's complement value. Conversion factor: 7.8125 m°C/LSB
-  return i2c_readword(INA_REGISTER::DIETEMP);
+  return (double)i2c_readword(INA_REGISTER::DIETEMP) * (double)7.8125 / (double)1000.0;
 }
 
-uint32_t RawCurrent()
+double Current()
 {
   //Current.
   //Calculated current output in Amperes. Two's complement value.
-  return (i2c_readUint32(INA_REGISTER::CURRENT) & (uint32_t)0xFFFFF0) >> 4;
+  return CURRENT_LSB * (double)i2c_readInt24(INA_REGISTER::CURRENT);
 }
 
 void loop()
@@ -430,13 +476,12 @@ void loop()
   GreenLED(true);
   delay(250);
 
-  //195.3125uV per LSB
-  double voltage = ((double)RawBusVoltage() * (double)195.3125) / 1000000;
-
+  double voltage = 0; //BusVoltage();
   //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
-  double current = ((double)RawCurrent() * CURRENT_LSB); // / 1000000;
-
-  double temperature = RawDieTemperature() * (double)7.8125 / 1000.0;
+  double current = Current();
+  double temperature = 0; //DieTemperature();
+  double power = 0;       //Power();
+  double shuntv = ShuntVoltage();
 
 #ifdef DIYBMS_DEBUG
   //debugSerial.print('#');
@@ -445,6 +490,10 @@ void loop()
   debugSerial.print("   ");
   debugSerial.print(current, 6);
   debugSerial.print("   ");
+  debugSerial.print(power, 3);
+  debugSerial.print("W   ");
+  debugSerial.print(shuntv, 6);
+  debugSerial.print("mV   ");
   debugSerial.println(temperature, 6);
 #endif
 }
