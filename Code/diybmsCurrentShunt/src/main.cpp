@@ -494,9 +494,14 @@ void ConfigureI2C()
   //Conversion Factor: 1.25 µV/LSB when ADCRANGE = 1.
 
   //Alert over current at 0.725A
-  const double x=(0.725 / full_scale_current) * full_scale_adc;
+  const double x = (0.725 / full_scale_current) * full_scale_adc;
   int16_t CurrentOverThreshold = (x * 1000.0 / 1.24);
   i2c_writeword(INA_REGISTER::SOVL, CurrentOverThreshold);
+
+  //Negative (limit current whilst charging)
+  const double y = (-0.725 / full_scale_current) * full_scale_adc;
+  int16_t CurrentUnderThreshold = (y * 1000.0 / 1.24);
+  i2c_writeword(INA_REGISTER::SUVL, CurrentUnderThreshold);
 }
 
 void setup()
@@ -633,6 +638,7 @@ ISR(PORTB_PORT_vect)
   }
 }
 
+volatile uint8_t err_count;
 void loop()
 {
   wdt_reset();
@@ -644,35 +650,44 @@ void loop()
 
   if (ALERT_TRIGGERED)
   {
+    err_count = 0;
     ALERT_TRIGGERED = false;
     diag_alrt_value = i2c_readword(INA_REGISTER::DIAG_ALRT);
 
     if (diag_alrt_value & bit(DIAG_ALRT_FIELD::BUSOL))
     {
       debugSerial.print(" Over-V ");
+      err_count++;
     }
 
     if (diag_alrt_value & bit(DIAG_ALRT_FIELD::BUSUL))
     {
       debugSerial.print(" Under-V ");
+      err_count++;
     }
 
     if (diag_alrt_value & bit(DIAG_ALRT_FIELD::SHNTOL))
     {
       debugSerial.print(" Over-C ");
+      err_count++;
     }
 
     if (diag_alrt_value & bit(DIAG_ALRT_FIELD::SHNTUL))
     {
       debugSerial.print(" Under-C ");
+      err_count++;
     }
 
     if (diag_alrt_value & bit(DIAG_ALRT_FIELD::POL))
     {
       debugSerial.print(" Over-P ");
+      err_count++;
     }
 
-    RedLED(false);
+    if (err_count == 0)
+    {
+      RedLED(false);
+    }
   }
 
   double voltage = BusVoltage();
