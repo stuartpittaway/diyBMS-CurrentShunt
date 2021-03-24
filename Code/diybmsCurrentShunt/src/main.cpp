@@ -89,28 +89,31 @@ enum INA_REGISTER : uint8_t
   DIE_ID = 0xFF
 };
 
-//const uint16_t INA_RESET_DEVICE{0x8000};
-const uint16_t INA_RESET_DEVICE{_BV(15)};
+enum DIAG_ALRT_FIELD : uint16_t
+{
+  ALATCH = 15,
+  CNVR = 14,
+  SLOWALERT = 13,
+  APOL = 12,
+  ENERGYOF = 11,
+  CHARGEOF = 10,
+  MATHOF = 9,
+  RESERVED = 8,
+  TMPOL = 7,
+  SHNTOL = 6,
+  SHNTUL = 5,
+  BUSOL = 4,
+  BUSUL = 3,
+  POL = 2,
+  CNVRF = 1,
+  MEMSTAT = 0
+};
 
 void RedLED(bool value);
 void GreenLED(bool value);
 
 volatile bool wdt_triggered = false;
 volatile uint16_t wdt_triggered_count;
-
-volatile bool i = false;
-ISR(PORTB_PORT_vect)
-{
-  if (PORTB.INTFLAGS && PIN1_bm)
-  {
-    //INA228 has triggered an ALERT interrupt
-    i = !i;
-    RedLED(i);
-  }
-
-  //Reset interrupt
-  PORTB.INTFLAGS = 0xFF;
-}
 
 void ConfigurePorts()
 {
@@ -133,7 +136,7 @@ void ConfigurePorts()
   // PB3 = RX
   // Set pins as Outputs (other pins are inputs)
   PORTB.DIR = PIN0_bm | PIN2_bm;
-  PORTB.PIN1CTRL = PORT_PULLUPEN_bm | PORT_ISC_enum::PORT_ISC_FALLING_gc;
+  PORTB.PIN1CTRL = PORT_PULLUPEN_bm | PORT_ISC_enum::PORT_ISC_BOTHEDGES_gc;
   //PORTB.PIN1CTRL = PORT_ISC_enum::PORT_ISC_FALLING_gc;
 
   //Enable interrupts
@@ -374,6 +377,8 @@ void ResetChargeEnergyRegisters()
   }
 }
 
+volatile uint16_t diag_alrt_value = 0;
+
 void ConfigureI2C()
 {
   // join i2c bus (address optional for master)
@@ -390,8 +395,10 @@ void ConfigureI2C()
     i2c_error();
   }
 
+  const uint16_t config_value = _BV(15) | _BV(14) | _BV(4); //RESET, RSTACC & Enable ADCRANGE = 40.96mV scale
+
   //Now we know the INA228 is connected, reset to defaults
-  if (!i2c_writeword(INA_REGISTER::CONFIG, INA_RESET_DEVICE))
+  if (!i2c_writeword(INA_REGISTER::CONFIG, config_value))
   {
     i2c_error();
   }
@@ -407,13 +414,6 @@ void ConfigureI2C()
 #ifdef DIYBMS_DEBUG
     debugSerial.println(dieid, HEX);
 #endif
-    i2c_error();
-  }
-
-  const uint16_t value = _BV(15) | _BV(4); //RESET & Enable ADCRANGE = 40.96mV scale
-
-  if (!i2c_writeword(INA_REGISTER::CONFIG, value))
-  {
     i2c_error();
   }
 
@@ -439,7 +439,6 @@ void ConfigureI2C()
   // SHUNT_CAL must be multiplied by 4 for ADCRANGE = 1
   uint16_t shunt_cal_value = (uint16_t)((double)13107200000.0 * CURRENT_LSB * RSHUNT * (double)4.0);
 
-  //shuntcal_value+=300;
   //Top 2 bits are not used
   shunt_cal_value = shunt_cal_value & 0x3FFF;
 #ifdef DIYBMS_DEBUG
@@ -451,23 +450,22 @@ void ConfigureI2C()
     i2c_error();
   }
 
-  //CNVR = Setting this bit high configures the Alert pin to be asserted when the Conversion Ready Flag (bit 1) is asserted, indicating that a conversion cycle has completed
-
-  //SLOWALERT
-  uint16_t diag_alrt_value = _BV(13);
+  //SLOWALERT ALATCH
+  diag_alrt_value = bit(DIAG_ALRT_FIELD::SLOWALERT); // | bit(DIAG_ALRT_FIELD::ALATCH);
   if (!i2c_writeword(INA_REGISTER::DIAG_ALRT, diag_alrt_value))
   {
     i2c_error();
   }
 
+  //Check MEMSTAT=1 which proves the INA chip is not corrupt
   diag_alrt_value = i2c_readword(INA_REGISTER::DIAG_ALRT);
-  /*
+  /*  
 #ifdef DIYBMS_DEBUG
   debugSerial.print("DIAG_ALRT=0x");
   debugSerial.println(diag_alrt_value, HEX);
 #endif
 */
-  if (diag_alrt_value & 0x01 == 0)
+  if (diag_alrt_value & bit(DIAG_ALRT_FIELD::MEMSTAT) == 0)
   {
     //MEMSTAT
     //This bit is set to 0 if a checksum error is detected in the device trim memory space.
@@ -475,6 +473,30 @@ void ConfigureI2C()
     //1h = Normal Operation
     i2c_error();
   }
+
+  //Sets the threshold for comparison of the value to detect Bus Overvoltage (overvoltage protection).
+  //Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
+  uint16_t BusOvervoltageThreshold = (uint16_t)(12.0F / 0.003125F) & 0x7FFFU;
+  i2c_writeword(INA_REGISTER::BOVL, BusOvervoltageThreshold);
+
+  //uint16_t BusUndervoltageThreshold = (uint16_t)(5.0F / 0.003125F) & 0x7FFFU;
+  //i2c_writeword(INA_REGISTER::BUVL, BusUndervoltageThreshold);
+
+  //Sets the threshold for comparison of the value to detect power overlimit measurements. Unsigned representation, positive value only.
+  //The value entered in this field compares directly against the value from the POWER register to determine if an
+  //over power condition exists. Conversion factor: 256 × Power LSB.
+  //uint16_t PowerOverLimitThreshold = (uint16_t)(100);
+  //i2c_writeword(INA_REGISTER::PWR_LIMIT, PowerOverLimitThreshold);
+
+  //Current limit based on mV scale on shunt
+  //Sets the threshold for comparison of the value to detect Shunt Overvoltage (overcurrent protection). Two's complement value.
+  //Conversion Factor: 1.25 µV/LSB when ADCRANGE = 1.
+
+  //Test SHUNT voltage = 0.24mV = 0.725A
+  // 0.24mV = 240µV / 1.24uV = 192
+  int16_t CurrentOverThreshold = (0.24 * 1000.0 / 1.24);
+  i2c_writeword(INA_REGISTER::SOVL, CurrentOverThreshold);
+
 }
 
 void setup()
@@ -590,9 +612,29 @@ double Current()
 double amphour_in = 0;
 double amphour_out = 0;
 
+void printBit16(uint16_t b)
+{
+  for (int i = 15; i >= 0; i--)
+    debugSerial.print(bitRead(b, i));
+}
+
+volatile bool ALERT_TRIGGERED = false;
+
+ISR(PORTB_PORT_vect)
+{
+  uint8_t flags = PORTB.INTFLAGS;
+  PORTB.INTFLAGS = flags; //clear flags
+
+  if (flags && PIN1_bm)
+  {
+    //INA228 has triggered an ALERT interrupt
+    RedLED(true);
+    ALERT_TRIGGERED = true;
+  }
+}
+
 void loop()
 {
-
   wdt_reset();
 
   GreenLED(false);
@@ -600,12 +642,45 @@ void loop()
   GreenLED(true);
   delay(250);
 
+  if (ALERT_TRIGGERED)
+  {
+    ALERT_TRIGGERED = false;
+    diag_alrt_value = i2c_readword(INA_REGISTER::DIAG_ALRT);
+
+    if (diag_alrt_value & bit(DIAG_ALRT_FIELD::BUSOL))
+    {
+      debugSerial.print(" Over-V ");
+    }
+
+    if (diag_alrt_value & bit(DIAG_ALRT_FIELD::BUSUL))
+    {
+      debugSerial.print(" Under-V ");
+    }
+
+    if (diag_alrt_value & bit(DIAG_ALRT_FIELD::SHNTOL))
+    {
+      debugSerial.print(" Over-C ");
+    }
+
+    if (diag_alrt_value & bit(DIAG_ALRT_FIELD::SHNTUL))
+    {
+      debugSerial.print(" Under-C ");
+    }
+
+    if (diag_alrt_value & bit(DIAG_ALRT_FIELD::POL))
+    {
+      debugSerial.print(" Over-P ");
+    }
+
+    RedLED(false);
+  }
+
   double voltage = BusVoltage();
   //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
   double current = Current();
   double temperature = DieTemperature();
   double power = Power();
-  //double shuntv = ShuntVoltage();
+  double shuntv = ShuntVoltage();
   //double energy_joules = Energy();
   double charge_coulombs = Charge();
 
@@ -633,8 +708,8 @@ void loop()
   debugSerial.print("   ");
   debugSerial.print(power, 3);
   debugSerial.print("W   ");
-  //debugSerial.print(shuntv, 6);
-  //debugSerial.print("mV   ");
+  debugSerial.print(shuntv, 6);
+  debugSerial.print("mV   ");
   debugSerial.print(temperature, 2);
 
   debugSerial.print("  Ah in=");
@@ -650,7 +725,11 @@ void loop()
   //Calculated charge output. Output value is in Coulombs. Two's complement value
   debugSerial.print("  Chrg=");
   debugSerial.print(charge_coulombs, 6);
-  debugSerial.print("C ");
+  debugSerial.print("C   alrt=");
+
+  printBit16(diag_alrt_value);
+  //debugSerial.print(diag_alrt_value, HEX);
+
   debugSerial.println();
 #endif
 }
