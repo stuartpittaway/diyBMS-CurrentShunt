@@ -53,9 +53,15 @@ SendOnlySoftwareSerial debugSerial(0); // Tx pin
 //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
 const double shunt_max_current = 150.0;
 const double shunt_millivolt = 50.0;
-const double full_scale_current = shunt_max_current / shunt_millivolt * 40.96;
+//Scale the full current based on 40.96mV (max range for 20bit ADC)
+//const double full_scale_current = shunt_max_current;
+
+const double full_scale_current = (shunt_max_current / shunt_millivolt) * 40.96;
+
 const double CURRENT_LSB = full_scale_current / (double)0x80000;
 const double RSHUNT = (shunt_millivolt / 1000.0) / shunt_max_current;
+
+const double CoulombsToAmpHours = 0.00027778;
 
 const uint8_t INA228_I2C_Address{B1000000};
 
@@ -236,7 +242,7 @@ int16_t i2c_readword(const uint8_t inareg)
   delayMicroseconds(10);
   Wire.requestFrom(INA228_I2C_Address, (uint8_t)2); // Request 2 bytes
 
-  uint8_t a, b, c;
+  uint8_t a, b;
   a = Wire.read();
   b = Wire.read();
 
@@ -358,6 +364,16 @@ void i2c_error()
   delay(10000);
 }
 
+void ResetChargeEnergyRegisters()
+{
+  const uint16_t value = _BV(4) | _BV(14); //RSTACC & ADCRANGE
+
+  if (!i2c_writeword(INA_REGISTER::CONFIG, value))
+  {
+    i2c_error();
+  }
+}
+
 void ConfigureI2C()
 {
   // join i2c bus (address optional for master)
@@ -394,7 +410,7 @@ void ConfigureI2C()
     i2c_error();
   }
 
-  const uint16_t value = _BV(4); //Enable ADCRANGE = 40.96mV scale
+  const uint16_t value = _BV(15) | _BV(4); //RESET & Enable ADCRANGE = 40.96mV scale
 
   if (!i2c_writeword(INA_REGISTER::CONFIG, value))
   {
@@ -436,9 +452,27 @@ void ConfigureI2C()
   }
 
   //CNVR = Setting this bit high configures the Alert pin to be asserted when the Conversion Ready Flag (bit 1) is asserted, indicating that a conversion cycle has completed
-  const uint16_t diag_alrt_value = 0; //_BV(14);
+
+  //SLOWALERT
+  uint16_t diag_alrt_value = _BV(13);
   if (!i2c_writeword(INA_REGISTER::DIAG_ALRT, diag_alrt_value))
   {
+    i2c_error();
+  }
+
+  diag_alrt_value = i2c_readword(INA_REGISTER::DIAG_ALRT);
+  /*
+#ifdef DIYBMS_DEBUG
+  debugSerial.print("DIAG_ALRT=0x");
+  debugSerial.println(diag_alrt_value, HEX);
+#endif
+*/
+  if (diag_alrt_value & 0x01 == 0)
+  {
+    //MEMSTAT
+    //This bit is set to 0 if a checksum error is detected in the device trim memory space.
+    //0h = Memory Checksum Error
+    //1h = Normal Operation
     i2c_error();
   }
 }
@@ -510,6 +544,20 @@ double ShuntVoltage()
   return (double)78.125 * (double)i2c_readInt24(INA_REGISTER::VSHUNT) / 1e+6;
 }
 
+//Energy in JOULES
+double Energy()
+{
+  uint64_t energy = i2c_readUint40(INA_REGISTER::ENERGY);
+  return 16.0 * 3.2 * CURRENT_LSB * energy;
+}
+
+// Charge in Coulombs
+double Charge()
+{
+  int64_t charge = i2c_readInt40(INA_REGISTER::CHARGE);
+  return CURRENT_LSB * (int32_t)charge;
+}
+
 double Power()
 {
   //Calculated power output.
@@ -539,8 +587,12 @@ double Current()
   return CURRENT_LSB * (double)i2c_readInt24(INA_REGISTER::CURRENT);
 }
 
+double amphour_in = 0;
+double amphour_out = 0;
+
 void loop()
 {
+
   wdt_reset();
 
   GreenLED(false);
@@ -553,7 +605,24 @@ void loop()
   double current = Current();
   double temperature = DieTemperature();
   double power = Power();
-  double shuntv = ShuntVoltage();
+  //double shuntv = ShuntVoltage();
+  //double energy_joules = Energy();
+  double charge_coulombs = Charge();
+
+  //8202
+  if (power > 0)
+  {
+    if (charge_coulombs > 0)
+    {
+      amphour_out += charge_coulombs * CoulombsToAmpHours;
+    }
+    else
+    {
+      amphour_in += charge_coulombs * CoulombsToAmpHours;
+    }
+  }
+
+  ResetChargeEnergyRegisters();
 
 #ifdef DIYBMS_DEBUG
   //debugSerial.print('#');
@@ -564,23 +633,22 @@ void loop()
   debugSerial.print("   ");
   debugSerial.print(power, 3);
   debugSerial.print("W   ");
-  debugSerial.print(shuntv, 6);
-  debugSerial.print("mV   ");
-  debugSerial.println(temperature, 6);
+  //debugSerial.print(shuntv, 6);
+  //debugSerial.print("mV   ");
+  debugSerial.print(temperature, 2);
+
+  debugSerial.print("  Ah in=");
+  debugSerial.print(amphour_in, 3);
+  debugSerial.print("  Ah out=");
+  debugSerial.print(amphour_out, 3);
 
   //Calculated energy output. Output value is in Joules. Unsigned representation. Positive value.
-  debugSerial.print("Energy=");
-  uint64_t energy = i2c_readUint40(INA_REGISTER::ENERGY);
-  double energy_joules = 16.0 * 3.2 * CURRENT_LSB * (uint32_t)energy;
-  debugSerial.print(" ");
-  debugSerial.print(energy_joules, 6);
-  debugSerial.print("J ");
+  //debugSerial.print("  Engy=");
+  //debugSerial.print(energy_joules, 6);
+  //debugSerial.print("J ");
 
   //Calculated charge output. Output value is in Coulombs. Two's complement value
-  debugSerial.print("  Charge=");
-  int64_t charge = i2c_readInt40(INA_REGISTER::CHARGE);
-  double charge_coulombs = CURRENT_LSB * (int32_t)charge;
-  debugSerial.print(" ");
+  debugSerial.print("  Chrg=");
   debugSerial.print(charge_coulombs, 6);
   debugSerial.print("C ");
   debugSerial.println();
