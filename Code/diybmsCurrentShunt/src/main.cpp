@@ -56,7 +56,8 @@ const double shunt_millivolt = 50.0;
 //Scale the full current based on 40.96mV (max range for 20bit ADC)
 //const double full_scale_current = shunt_max_current;
 
-const double full_scale_current = (shunt_max_current / shunt_millivolt) * 40.96;
+const double full_scale_adc = 40.96;
+const double full_scale_current = (shunt_max_current / shunt_millivolt) * full_scale_adc;
 
 const double CURRENT_LSB = full_scale_current / (double)0x80000;
 const double RSHUNT = (shunt_millivolt / 1000.0) / shunt_max_current;
@@ -492,11 +493,10 @@ void ConfigureI2C()
   //Sets the threshold for comparison of the value to detect Shunt Overvoltage (overcurrent protection). Two's complement value.
   //Conversion Factor: 1.25 µV/LSB when ADCRANGE = 1.
 
-  //Test SHUNT voltage = 0.24mV = 0.725A
-  // 0.24mV = 240µV / 1.24uV = 192
-  int16_t CurrentOverThreshold = (0.24 * 1000.0 / 1.24);
+  //Alert over current at 0.725A
+  const double x=(0.725 / full_scale_current) * full_scale_adc;
+  int16_t CurrentOverThreshold = (x * 1000.0 / 1.24);
   i2c_writeword(INA_REGISTER::SOVL, CurrentOverThreshold);
-
 }
 
 void setup()
