@@ -22,6 +22,9 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
   contributions under the same license as the original.
 * No additional restrictions — You may not apply legal terms or technological measures
   that legally restrict others from doing anything the license permits.
+
+** COMMERCIAL USE AND RESALE PROHIBITED **
+
 */
 
 // ATTINY1614 (tinyAVR® 1-series of microcontrollers)
@@ -29,6 +32,16 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 
 //MODBUS Protocol
 //https://www.ni.com/en-gb/innovations/white-papers/14/the-modbus-protocol-in-depth.html
+
+#if !defined(MODBUSDEFAULTBAUDRATE)
+#error MODBUSDEFAULTBAUDRATE must be defined
+#endif
+#if !defined(MODBUSBASEADDRESS)
+#error MODBUSBASEADDRESS must be defined
+#endif
+#if !defined(MODBUSSERIALCONFIG)
+#error MODBUSSERIALCONFIG must be defined
+#endif
 
 #include <Arduino.h>
 #include <avr/sleep.h>
@@ -65,6 +78,10 @@ const double RSHUNT = (shunt_millivolt / 1000.0) / shunt_max_current;
 const double CoulombsToAmpHours = 0.00027778;
 
 const uint8_t INA228_I2C_Address{B1000000};
+
+uint16_t ModBusBaudRate = MODBUSDEFAULTBAUDRATE;
+
+uint8_t ModbusSlaveAddress = MODBUSBASEADDRESS;
 
 enum INA_REGISTER : uint8_t
 {
@@ -112,6 +129,7 @@ enum DIAG_ALRT_FIELD : uint16_t
 
 void RedLED(bool value);
 void GreenLED(bool value);
+void printBit16(uint16_t b);
 
 volatile bool wdt_triggered = false;
 volatile uint16_t wdt_triggered_count;
@@ -138,8 +156,10 @@ void ConfigurePorts()
   // Set pins as Outputs (other pins are inputs)
   PORTB.DIR = PIN0_bm | PIN2_bm;
   PORTB.PIN1CTRL = PORT_PULLUPEN_bm | PORT_ISC_enum::PORT_ISC_BOTHEDGES_gc;
-  //PORTB.PIN1CTRL = PORT_ISC_enum::PORT_ISC_FALLING_gc;
 
+  PORTB.OUTSET = PIN2_bm; // TX is high
+
+  USART0.CTRLB = USART_RXEN_bm | USART_TXEN_bm; //enable rx and tx
   //Enable interrupts
   sei();
 }
@@ -159,6 +179,18 @@ void ReadJumperPins()
   bool AddressJumper = (PORTA.IN & PIN4_bm);
 
   //TODO: Do something with the above jumper settings
+
+  if (BaudRateJumper == false)
+  {
+    //Half the default baud rate if the jumper is connected, so 19200 goes to 9600
+    ModBusBaudRate = ModBusBaudRate / 2;
+  }
+
+  if (AddressJumper == false)
+  {
+    //Its connected
+    ModbusSlaveAddress += 8;
+  }
 
   //Switch off pull ups
   PORTA.PIN3CTRL = 0;
@@ -519,14 +551,7 @@ void setup()
 
   ConfigurePorts();
 
-  //Serial uses PB2/PB3 and PB0 for XDIR
-  Serial.begin(19200, SERIAL_8N1);
-  //Serial.swap(0);
-
-  //0x01= Enables RS-485 mode with control of an external line driver through a dedicated Transmit Enable (TE) pin.
-  USART0.CTRLA |= B00000001;
-
-  for (size_t i = 0; i < 25; i++)
+  for (size_t i = 0; i < 5; i++)
   {
     GreenLED(true);
     if (wdt_triggered)
@@ -552,9 +577,27 @@ void setup()
   debugSerial.begin(2400);
   debugSerial.println();
   debugSerial.println("DEBUG");
+  //debugSerial.println(ModBusBaudRate);
+  //debugSerial.println(MODBUSSERIALCONFIG);
 #endif
 
+  //Disable RS485 receiver (debug!)
+  PORTB.OUTSET = PIN0_bm;
+  PORTB.PIN0CTRL = 0;
+
+  /*
+  while(1) {
+    printBit16( PORTB.IN );
+    debugSerial.println();
+  }
+*/
   ConfigureI2C();
+
+  //Serial uses PB2/PB3 and PB0 for XDIR
+  Serial.begin(ModBusBaudRate, MODBUSSERIALCONFIG);
+
+  //0x01= Enables RS-485 mode with control of an external line driver through a dedicated Transmit Enable (TE) pin.
+  //USART0.CTRLA |= B00000001;
 }
 
 double BusVoltage()
@@ -639,14 +682,53 @@ ISR(PORTB_PORT_vect)
 }
 
 volatile uint8_t err_count;
+
+//Buffer to hold 8 byte modbus RTU request
+uint8_t modbus[8];
+
+void ProcessModBusRequest(uint8_t cmd, uint16_t address, uint16_t quantity)
+{
+  debugSerial.print("cmd=");
+  debugSerial.print(cmd, HEX);
+  debugSerial.print(" add=");
+  debugSerial.print(address, HEX);
+  debugSerial.print(" qty=");
+  debugSerial.print(quantity, HEX);
+
+  debugSerial.println();
+}
+
+unsigned long timer = 0;
+
+#define combineBytes(high, low) (high << 8) + low
+
+// Compute the MODBUS RTU CRC
+uint16_t ModbusRTU_CRC(uint8_t *buf, uint8_t len)
+{
+  uint16_t crc = 0xFFFF;
+
+  for (uint8_t pos = 0; pos < len; pos++)
+  {
+    crc ^= (uint16_t)buf[pos]; // XOR byte into least sig. byte of crc
+
+    for (uint8_t i = 8; i != 0; i--)
+    { // Loop over each bit
+      if ((crc & 0x0001) != 0)
+      {            // If the LSB is set
+        crc >>= 1; // Shift right and XOR 0xA001
+        crc ^= 0xA001;
+      }
+      else         // Else LSB is not set
+        crc >>= 1; // Just shift right
+    }
+  }
+  // Note, this number has low and high bytes swapped, so use it accordingly (or swap bytes)
+  return crc;
+}
+
 void loop()
 {
   wdt_reset();
-
-  GreenLED(false);
-  delay(250);
-  GreenLED(true);
-  delay(250);
 
   if (ALERT_TRIGGERED)
   {
@@ -690,31 +772,87 @@ void loop()
     }
   }
 
-  double voltage = BusVoltage();
-  //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
-  double current = Current();
-  double temperature = DieTemperature();
-  double power = Power();
-  double shuntv = ShuntVoltage();
-  //double energy_joules = Energy();
-  double charge_coulombs = Charge();
-
-  //8202
-  if (power > 0)
+  while (Serial.available())
   {
-    if (charge_coulombs > 0)
+    // we have a rolling 8 byte window
+    for (uint8_t k = 1; k < 8; k++)
+      modbus[k - 1] = modbus[k];
+
+    modbus[7] = (uint8_t)Serial.read(); // receive a byte
+    
+    dumpByte(modbus[7]);
+    debugSerial.print(' ');
+
+    //3 = Read Holding Registers
+    if ((modbus[0] == ModbusSlaveAddress) &&
+        ((modbus[1] == 0x03) ||
+         (modbus[1] == 0x04) ||
+         (modbus[1] == 0x06)))
     {
-      amphour_out += charge_coulombs * CoulombsToAmpHours;
-    }
-    else
-    {
-      amphour_in += charge_coulombs * CoulombsToAmpHours;
+      //Do something
+      debugSerial.println('P');
+
+      uint16_t crc16 = combineBytes(modbus[7], modbus[6]);
+
+      uint16_t calculatedCRC = ModbusRTU_CRC(modbus, 6);
+      /*
+#ifdef DIYBMS_DEBUG
+      debugSerial.print('#');
+      debugSerial.print(crc16, HEX);
+      debugSerial.print('=');
+      debugSerial.print(calculatedCRC, HEX);
+      debugSerial.println();
+#endif
+*/
+      if (crc16 == calculatedCRC)
+      {
+        //1 = command
+        //2+3 = data address
+        //4+5 = data amount/quantity
+        ProcessModBusRequest(modbus[1], combineBytes(modbus[2], modbus[3]), combineBytes(modbus[4], modbus[5]));
+      }
     }
   }
 
-  ResetChargeEnergyRegisters();
+  if (millis() > timer)
+  {
+
+    GreenLED(true);
+
+    /*
+  delay(250);
+  delay(250);
+*/
+
+    //Check again in 2 seconds
+    timer = millis() + 2000;
+
+    double voltage = BusVoltage();
+    //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
+    double current = Current();
+    double temperature = DieTemperature();
+    double power = Power();
+    double shuntv = ShuntVoltage();
+    //double energy_joules = Energy();
+    double charge_coulombs = Charge();
+
+    //8202
+    if (power > 0)
+    {
+      if (charge_coulombs > 0)
+      {
+        amphour_out += charge_coulombs * CoulombsToAmpHours;
+      }
+      else
+      {
+        amphour_in += charge_coulombs * CoulombsToAmpHours;
+      }
+    }
+
+    ResetChargeEnergyRegisters();
 
 #ifdef DIYBMS_DEBUG
+/*
   //debugSerial.print('#');
 
   debugSerial.print(voltage, 6);
@@ -746,5 +884,9 @@ void loop()
   //debugSerial.print(diag_alrt_value, HEX);
 
   debugSerial.println();
+*/
 #endif
+
+    GreenLED(false);
+  }
 }
