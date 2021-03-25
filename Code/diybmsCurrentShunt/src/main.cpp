@@ -130,6 +130,7 @@ enum DIAG_ALRT_FIELD : uint16_t
 void RedLED(bool value);
 void GreenLED(bool value);
 void printBit16(uint16_t b);
+uint16_t ModbusRTU_CRC(uint8_t *buf, uint8_t len);
 
 volatile bool wdt_triggered = false;
 volatile uint16_t wdt_triggered_count;
@@ -686,16 +687,108 @@ volatile uint8_t err_count;
 //Buffer to hold 8 byte modbus RTU request
 uint8_t modbus[8];
 
-void ProcessModBusRequest(uint8_t cmd, uint16_t address, uint16_t quantity)
+void SendModbusData(uint8_t *sendbuff, const uint8_t len)
 {
-  debugSerial.print("cmd=");
-  debugSerial.print(cmd, HEX);
+  // calc checksum
+  uint16_t csum = ModbusRTU_CRC(sendbuff, len);
+
+  // insert checksum
+  sendbuff[len] = csum & 0xFF;
+  sendbuff[len + 1] = csum >> 8;
+
+  // send over rs485 wire
+  Serial.write(sendbuff, 2 + len);
+}
+
+uint8_t sendbuff[128];
+
+void ReadHoldingRegisters(uint16_t address, uint16_t quantity)
+{
+  debugSerial.print("R.H.R ");
   debugSerial.print(" add=");
   debugSerial.print(address, HEX);
   debugSerial.print(" qty=");
   debugSerial.print(quantity, HEX);
-
   debugSerial.println();
+
+  sendbuff[0] = ModbusSlaveAddress; // slv addr
+  sendbuff[1] = 0x03;               // fcode
+
+  uint8_t ptr = 3;
+
+  double v = 0;
+  uint8_t *v2 = (uint8_t *)&v;
+
+  double c = 0;
+  uint8_t *c2 = (uint8_t *)&c;
+
+  double p = 0;
+  uint8_t *p2 = (uint8_t *)&p;
+
+  for (size_t i = address; i < address + quantity; i++)
+  {
+    if (i == 0)
+    {
+      //Address zero, top 16 bits of voltage
+      v = BusVoltage();
+      sendbuff[ptr] = v2[1];
+      ptr++;
+      sendbuff[ptr] = v2[0];
+      ptr++;
+    }
+
+    if (i == 1)
+    {
+      //Address one, bottom 16 bits of voltage
+      sendbuff[ptr] = v2[3];
+      ptr++;
+      sendbuff[ptr] = v2[2];
+      ptr++;
+    }
+
+    if (i == 2)
+    {
+      //Current
+      c = Current();
+      sendbuff[ptr] = c2[1];
+      ptr++;
+      sendbuff[ptr] = c2[0];
+      ptr++;
+    }
+
+    if (i == 3)
+    {
+      //Current
+      sendbuff[ptr] = c2[3];
+      ptr++;
+      sendbuff[ptr] = c2[2];
+      ptr++;
+    }    
+
+    if (i == 4)
+    {
+      //Power
+      p = Power();
+      sendbuff[ptr] = p2[1];
+      ptr++;
+      sendbuff[ptr] = p2[0];
+      ptr++;
+    }
+
+    if (i == 5)
+    {
+      sendbuff[ptr] = p2[3];
+      ptr++;
+      sendbuff[ptr] = p2[2];
+      ptr++;
+    }    
+
+  }
+
+  sendbuff[2] = ptr - 3;
+
+  //5 & 6 =
+  SendModbusData(&sendbuff[0], ptr);
 }
 
 unsigned long timer = 0;
@@ -774,23 +867,35 @@ void loop()
 
   while (Serial.available())
   {
+    RedLED(true);
     // we have a rolling 8 byte window
     for (uint8_t k = 1; k < 8; k++)
+    {
       modbus[k - 1] = modbus[k];
+    }
 
     modbus[7] = (uint8_t)Serial.read(); // receive a byte
-    
-    dumpByte(modbus[7]);
-    debugSerial.print(' ');
+
+    //dumpByte(modbus[7]);
+    //debugSerial.print(' ');
+
+    RedLED(false);
 
     //3 = Read Holding Registers
-    if ((modbus[0] == ModbusSlaveAddress) &&
-        ((modbus[1] == 0x03) ||
+    if ((modbus[0] == ModbusSlaveAddress)
+
+        &&
+        ((modbus[1] == 0x03)
+         /*
+        ||
          (modbus[1] == 0x04) ||
-         (modbus[1] == 0x06)))
+         (modbus[1] == 0x06)
+         */
+         )
+
+    )
     {
       //Do something
-      debugSerial.println('P');
 
       uint16_t crc16 = combineBytes(modbus[7], modbus[6]);
 
@@ -809,7 +914,10 @@ void loop()
         //1 = command
         //2+3 = data address
         //4+5 = data amount/quantity
-        ProcessModBusRequest(modbus[1], combineBytes(modbus[2], modbus[3]), combineBytes(modbus[4], modbus[5]));
+        if (modbus[1] == 3)
+        {
+          ReadHoldingRegisters(combineBytes(modbus[2], modbus[3]), combineBytes(modbus[4], modbus[5]));
+        }
       }
     }
   }
