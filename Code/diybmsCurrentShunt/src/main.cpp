@@ -51,14 +51,6 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 
 #include "EmbeddedFiles_Defines.h"
 
-#define DIYBMS_DEBUG 1
-
-#ifdef DIYBMS_DEBUG
-//Just for debug purposes
-#include "SendOnlySoftwareSerial.h"
-SendOnlySoftwareSerial debugSerial(0); // Tx pin
-#endif
-
 #define GREENLED_PIN_BITMAP PIN7_bm
 #define REDLED_PIN_BITMAP PIN6_bm
 #define RELAY_PIN_BITMAP PIN5_bm
@@ -82,6 +74,13 @@ const uint8_t INA228_I2C_Address{B1000000};
 uint16_t ModBusBaudRate = MODBUSDEFAULTBAUDRATE;
 
 uint8_t ModbusSlaveAddress = MODBUSBASEADDRESS;
+
+//Buffer to hold 8 byte modbus RTU request
+uint8_t modbus[8];
+
+uint8_t sendbuff[128];
+
+bool relay_state = false;
 
 enum INA_REGISTER : uint8_t
 {
@@ -306,13 +305,6 @@ uint32_t i2c_readUint24(const uint8_t inareg)
   return reply;
 }
 
-void dumpByte(uint8_t data)
-{
-  if (data <= 0x0F)
-    debugSerial.print('0');
-  debugSerial.print(data, HEX);
-}
-
 uint64_t i2c_readUint40(const uint8_t inareg)
 {
   Wire.beginTransmission(INA228_I2C_Address);
@@ -383,11 +375,6 @@ int32_t i2c_readInt24(const uint8_t inareg)
 void i2c_error()
 {
   //Halt here with an error, i2c comms with INA228 failed
-
-#ifdef DIYBMS_DEBUG
-  debugSerial.println("I2C Error");
-#endif
-
   for (size_t i = 0; i < 100; i++)
   {
     wdt_reset();
@@ -445,9 +432,6 @@ void ConfigureI2C()
   //INA228 chip
   if (dieid != 0x228)
   {
-#ifdef DIYBMS_DEBUG
-    debugSerial.println(dieid, HEX);
-#endif
     i2c_error();
   }
 
@@ -475,9 +459,6 @@ void ConfigureI2C()
 
   //Top 2 bits are not used
   shunt_cal_value = shunt_cal_value & 0x3FFF;
-#ifdef DIYBMS_DEBUG
-  debugSerial.println(shunt_cal_value);
-#endif
 
   if (!i2c_writeword(INA_REGISTER::SHUNT_CAL, shunt_cal_value))
   {
@@ -493,12 +474,6 @@ void ConfigureI2C()
 
   //Check MEMSTAT=1 which proves the INA chip is not corrupt
   diag_alrt_value = i2c_readword(INA_REGISTER::DIAG_ALRT);
-  /*  
-#ifdef DIYBMS_DEBUG
-  debugSerial.print("DIAG_ALRT=0x");
-  debugSerial.println(diag_alrt_value, HEX);
-#endif
-*/
   if (diag_alrt_value & bit(DIAG_ALRT_FIELD::MEMSTAT) == 0)
   {
     //MEMSTAT
@@ -570,28 +545,12 @@ void setup()
 
   EnableWatchdog();
 
-  ReadJumperPins();
-
-#ifdef DIYBMS_DEBUG
-  //Steal the ADDRESS pin for a Serial debug output
-  PORTA.DIRSET = PIN4_bm;
-  debugSerial.begin(2400);
-  debugSerial.println();
-  debugSerial.println("DEBUG");
-  //debugSerial.println(ModBusBaudRate);
-  //debugSerial.println(MODBUSSERIALCONFIG);
-#endif
+  //ReadJumperPins();
 
   //Disable RS485 receiver (debug!)
   PORTB.OUTSET = PIN0_bm;
   PORTB.PIN0CTRL = 0;
 
-  /*
-  while(1) {
-    printBit16( PORTB.IN );
-    debugSerial.println();
-  }
-*/
   ConfigureI2C();
 
   //Serial uses PB2/PB3 and PB0 for XDIR
@@ -661,12 +620,6 @@ double Current()
 double amphour_in = 0;
 double amphour_out = 0;
 
-void printBit16(uint16_t b)
-{
-  for (int i = 15; i >= 0; i--)
-    debugSerial.print(bitRead(b, i));
-}
-
 volatile bool ALERT_TRIGGERED = false;
 
 ISR(PORTB_PORT_vect)
@@ -682,11 +635,6 @@ ISR(PORTB_PORT_vect)
   }
 }
 
-volatile uint8_t err_count;
-
-//Buffer to hold 8 byte modbus RTU request
-uint8_t modbus[8];
-
 void SendModbusData(uint8_t *sendbuff, const uint8_t len)
 {
   // calc checksum
@@ -699,8 +647,6 @@ void SendModbusData(uint8_t *sendbuff, const uint8_t len)
   // send over rs485 wire
   Serial.write(sendbuff, 2 + len);
 }
-
-uint8_t sendbuff[128];
 
 void extractHighWord(double *value, const uint8_t index)
 {
@@ -718,21 +664,108 @@ void extractLowWord(double *value, const uint8_t index)
   sendbuff[index + 1] = i[2 + 0];
 }
 
-void ReadHoldingRegisters(uint16_t address, uint16_t quantity)
+//Modbus command 2 Read Discrete Inputs
+uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity)
 {
-  /*
-  debugSerial.print("R.H.R ");
-  debugSerial.print(" add=");
-  debugSerial.print(address, HEX);
-  debugSerial.print(" qty=");
-  debugSerial.print(quantity, HEX);
-  debugSerial.println();
-*/
-  //Lets start with zeros in the buffer
-  memset(sendbuff, 0, sizeof(sendbuff));
+  uint8_t ptr = 3;
 
-  sendbuff[0] = ModbusSlaveAddress; // slv addr
-  sendbuff[1] = 0x03;               // fcode
+  //Safety check, only return max 32 registers
+  if (quantity > 32)
+  {
+    quantity = 32;
+  }
+
+  uint16_t config = i2c_readword(INA_REGISTER::CONFIG);
+  uint16_t adc_config = i2c_readword(INA_REGISTER::ADC_CONFIG);
+
+  uint8_t bitPosition = 0;
+  for (size_t i = address; i < address + quantity; i++)
+  {
+    bool outcome = false;
+    switch (i)
+    {
+
+    case 0:
+    {
+      outcome = diag_alrt_value & bit(DIAG_ALRT_FIELD::TMPOL);
+      break;
+    }
+    case 1:
+    {
+      outcome = diag_alrt_value & bit(DIAG_ALRT_FIELD::SHNTOL);
+      break;
+    }
+    case 2:
+    {
+      outcome = diag_alrt_value & bit(DIAG_ALRT_FIELD::SHNTUL);
+      break;
+    }
+    case 3:
+    {
+      outcome = diag_alrt_value & bit(DIAG_ALRT_FIELD::BUSOL);
+      break;
+    }
+    case 4:
+    {
+      outcome = diag_alrt_value & bit(DIAG_ALRT_FIELD::BUSUL);
+      break;
+    }
+    case 5:
+    {
+      outcome = diag_alrt_value & bit(DIAG_ALRT_FIELD::POL);
+      break;
+    }
+
+    case 6:
+    {
+      //Temperature compensation
+      outcome = config & bit(5);
+      break;
+    }
+
+    case 7:
+    {
+      //ADC Range
+      //0h = ±163.84 mV, 1h = ± 40.96 mV
+      outcome = config & bit(4);
+      break;
+    }
+
+    case 8:
+    {
+      outcome = relay_state;
+      break;
+    }
+
+    default:
+    {
+      break;
+    }
+    }
+
+    if (outcome)
+    {
+      sendbuff[ptr] = sendbuff[ptr] | (1 << bitPosition);
+    }
+
+    bitPosition++;
+    if (bitPosition == 8)
+    {
+      bitPosition = 0;
+      ptr++;
+    }
+  }
+
+  return ptr;
+}
+
+uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
+{
+  //Lets start with zeros in the buffer
+  //memset(sendbuff, 0, sizeof(sendbuff));
+
+  //sendbuff[0] = ModbusSlaveAddress; // slv addr
+  //sendbuff[1] = 0x03;               // fcode
 
   //Populate data from byte 3...
   uint8_t ptr = 3;
@@ -822,36 +855,20 @@ void ReadHoldingRegisters(uint16_t address, uint16_t quantity)
 
     case 9:
     {
-      //Strip out all the bits that can be reported,
-      //TMPOL, SHNTOL, SHNTUL, BUSOL, BUSUL, POL
-
-      uint16_t value = diag_alrt_value & (bit(DIAG_ALRT_FIELD::TMPOL) |
-                                          bit(DIAG_ALRT_FIELD::SHNTOL) |
-                                          bit(DIAG_ALRT_FIELD::SHNTUL) |
-                                          bit(DIAG_ALRT_FIELD::BUSOL) |
-                                          bit(DIAG_ALRT_FIELD::BUSUL) |
-                                          bit(DIAG_ALRT_FIELD::POL));
-      sendbuff[ptr] = (uint8_t)(value >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(value & 0x00FF);
-      break;
-    }
-
-    case 10:
-    {
       //Power
       p = Power();
       extractHighWord(&p, ptr);
       break;
     }
 
-    case 11:
+    case 10:
     {
       //Power
       extractLowWord(&p, ptr);
       break;
     }
 
-    case 12:
+    case 11:
     {
       //Shunt mV
       shuntv = ShuntVoltage();
@@ -859,13 +876,12 @@ void ReadHoldingRegisters(uint16_t address, uint16_t quantity)
       break;
     }
 
-    case 13:
+    case 12:
     {
       //Shunt mV
       extractLowWord(&shuntv, ptr);
       break;
     }
-
 
     default:
     {
@@ -876,9 +892,7 @@ void ReadHoldingRegisters(uint16_t address, uint16_t quantity)
     ptr += 2;
   } //end for
 
-  sendbuff[2] = ptr - 3;
-
-  SendModbusData(&sendbuff[0], ptr);
+  return ptr;
 }
 
 unsigned long timer = 0;
@@ -909,47 +923,25 @@ uint16_t ModbusRTU_CRC(uint8_t *buf, uint8_t len)
   return crc;
 }
 
+volatile uint16_t alert = 0;
+
 void loop()
 {
   wdt_reset();
 
   if (ALERT_TRIGGERED)
   {
-    err_count = 0;
     ALERT_TRIGGERED = false;
     diag_alrt_value = i2c_readword(INA_REGISTER::DIAG_ALRT);
 
-    if (diag_alrt_value & bit(DIAG_ALRT_FIELD::BUSOL))
-    {
-      //debugSerial.print(" Over-V ");
-      err_count++;
-    }
+    alert = diag_alrt_value & (bit(DIAG_ALRT_FIELD::TMPOL) |
+                               bit(DIAG_ALRT_FIELD::SHNTOL) |
+                               bit(DIAG_ALRT_FIELD::SHNTUL) |
+                               bit(DIAG_ALRT_FIELD::BUSOL) |
+                               bit(DIAG_ALRT_FIELD::BUSUL) |
+                               bit(DIAG_ALRT_FIELD::POL));
 
-    if (diag_alrt_value & bit(DIAG_ALRT_FIELD::BUSUL))
-    {
-      //debugSerial.print(" Under-V ");
-      err_count++;
-    }
-
-    if (diag_alrt_value & bit(DIAG_ALRT_FIELD::SHNTOL))
-    {
-      //debugSerial.print(" Over-C ");
-      err_count++;
-    }
-
-    if (diag_alrt_value & bit(DIAG_ALRT_FIELD::SHNTUL))
-    {
-      //debugSerial.print(" Under-C ");
-      err_count++;
-    }
-
-    if (diag_alrt_value & bit(DIAG_ALRT_FIELD::POL))
-    {
-      //debugSerial.print(" Over-P ");
-      err_count++;
-    }
-
-    if (err_count == 0)
+    if (alert == 0)
     {
       RedLED(false);
     }
@@ -957,7 +949,8 @@ void loop()
 
   while (Serial.available())
   {
-    RedLED(true);
+    GreenLED(true);
+
     // we have a rolling 8 byte window
     for (uint8_t k = 1; k < 8; k++)
     {
@@ -966,71 +959,58 @@ void loop()
 
     modbus[7] = (uint8_t)Serial.read(); // receive a byte
 
-    //dumpByte(modbus[7]);
-    //debugSerial.print(' ');
-
-    RedLED(false);
-
     //3 = Read Holding Registers
-    if ((modbus[0] == ModbusSlaveAddress)
-
-        &&
-        ((modbus[1] == 0x03)
-         /*
-        ||
-         (modbus[1] == 0x04) ||
-         (modbus[1] == 0x06)
-         */
-         )
-
-    )
+    if (
+        (modbus[0] == ModbusSlaveAddress) &&
+        ((modbus[1] == 2) || (modbus[1] == 3)))
     {
       //Do something
 
       uint16_t crc16 = combineBytes(modbus[7], modbus[6]);
 
       uint16_t calculatedCRC = ModbusRTU_CRC(modbus, 6);
-      /*
-#ifdef DIYBMS_DEBUG
-      debugSerial.print('#');
-      debugSerial.print(crc16, HEX);
-      debugSerial.print('=');
-      debugSerial.print(calculatedCRC, HEX);
-      debugSerial.println();
-#endif
-*/
       if (crc16 == calculatedCRC)
       {
+        //Prepare reply buffer
+        memset(sendbuff, 0, sizeof(sendbuff));
+        sendbuff[0] = ModbusSlaveAddress; // slv addr
+        sendbuff[1] = modbus[1];
+        uint8_t ptr = 0;
+
         //1 = command
         //2+3 = data address
         //4+5 = data amount/quantity
+        if (modbus[1] == 2)
+        {
+          ptr = ReadDiscreteInputs(combineBytes(modbus[2], modbus[3]), combineBytes(modbus[4], modbus[5]));
+        }
+
         if (modbus[1] == 3)
         {
-          ReadHoldingRegisters(combineBytes(modbus[2], modbus[3]), combineBytes(modbus[4], modbus[5]));
+          ptr = ReadHoldingRegisters(combineBytes(modbus[2], modbus[3]), combineBytes(modbus[4], modbus[5]));
         }
+
+        sendbuff[2] = ptr - 3;
+        SendModbusData(&sendbuff[0], ptr);
       }
+      GreenLED(false);
     }
   }
 
   if (millis() > timer)
   {
 
-    GreenLED(true);
-
-    /*
-  delay(250);
-  delay(250);
-*/
+    RedLED(true);
 
     //Check again in 2 seconds
-    timer = millis() + 2000;
+    timer = millis() + 5000;
 
-    double voltage = BusVoltage();
+    //double voltage = BusVoltage();
     //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
-    double current = Current();
+    //double current = Current();
     double power = Power();
-    double temperature = DieTemperature();
-    double shuntv = ShuntVoltage();
+    //double temperature = DieTemperature();
+    //double shuntv = ShuntVoltage();
     //double energy_joules = Energy();
     double charge_coulombs = Charge();
 
@@ -1049,42 +1029,10 @@ void loop()
 
     ResetChargeEnergyRegisters();
 
-#ifdef DIYBMS_DEBUG
-/*
-  //debugSerial.print('#');
-
-  debugSerial.print(voltage, 6);
-  debugSerial.print("   ");
-  debugSerial.print(current, 6);
-  debugSerial.print("   ");
-  debugSerial.print(power, 3);
-  debugSerial.print("W   ");
-  debugSerial.print(shuntv, 6);
-  debugSerial.print("mV   ");
-  debugSerial.print(temperature, 2);
-
-  debugSerial.print("  Ah in=");
-  debugSerial.print(amphour_in, 3);
-  debugSerial.print("  Ah out=");
-  debugSerial.print(amphour_out, 3);
-
-  //Calculated energy output. Output value is in Joules. Unsigned representation. Positive value.
-  //debugSerial.print("  Engy=");
-  //debugSerial.print(energy_joules, 6);
-  //debugSerial.print("J ");
-
-  //Calculated charge output. Output value is in Coulombs. Two's complement value
-  debugSerial.print("  Chrg=");
-  debugSerial.print(charge_coulombs, 6);
-  debugSerial.print("C   alrt=");
-
-  printBit16(diag_alrt_value);
-  //debugSerial.print(diag_alrt_value, HEX);
-
-  debugSerial.println();
-*/
-#endif
-
-    GreenLED(false);
+    if (alert == 0)
+    {
+      //Turn LED off if alert is not active
+      RedLED(false);
+    }
   }
 }
