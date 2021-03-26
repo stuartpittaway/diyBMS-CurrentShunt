@@ -56,16 +56,16 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 #define RELAY_PIN_BITMAP PIN5_bm
 
 //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
-const double shunt_max_current = 150.0;
-const double shunt_millivolt = 50.0;
+uint16_t shunt_max_current = 150;
+uint16_t shunt_millivolt = 50;
 //Scale the full current based on 40.96mV (max range for 20bit ADC)
 //const double full_scale_current = shunt_max_current;
 
-const double full_scale_adc = 40.96;
-const double full_scale_current = (shunt_max_current / shunt_millivolt) * full_scale_adc;
+double full_scale_adc = 40.96;
+double full_scale_current = ((double)shunt_max_current / (double)shunt_millivolt) * full_scale_adc;
 
-const double CURRENT_LSB = full_scale_current / (double)0x80000;
-const double RSHUNT = (shunt_millivolt / 1000.0) / shunt_max_current;
+double CURRENT_LSB = full_scale_current / (double)0x80000;
+double RSHUNT = ((double)shunt_millivolt / 1000.0) / (double)shunt_max_current;
 
 const double CoulombsToAmpHours = 0.00027778;
 
@@ -81,6 +81,10 @@ uint8_t modbus[8];
 uint8_t sendbuff[128];
 
 bool relay_state = false;
+
+//Holds what alert events trigger the relay to turn on/high
+//uses the same values/mapping as enum DIAG_ALRT_FIELD
+uint16_t relay_trigger_bitmap = 0;
 
 enum INA_REGISTER : uint8_t
 {
@@ -147,6 +151,9 @@ void ConfigurePorts()
 
   // Set pins as Outputs (other pins are inputs)
   PORTA.DIR = GREENLED_PIN_BITMAP | REDLED_PIN_BITMAP | RELAY_PIN_BITMAP;
+
+  //Relay off by default
+  PORTA.OUTCLR = RELAY_PIN_BITMAP;
 
   // Set Port B digital outputs
   // PB0 = XDIR (RS485 transmit enable)
@@ -525,6 +532,14 @@ void setup()
     wdt_triggered_count = 0;
   }
 
+  //By default, trigger relay on all alerts
+  relay_trigger_bitmap = bit(DIAG_ALRT_FIELD::TMPOL) |
+                         bit(DIAG_ALRT_FIELD::SHNTOL) |
+                         bit(DIAG_ALRT_FIELD::SHNTUL) |
+                         bit(DIAG_ALRT_FIELD::BUSOL) |
+                         bit(DIAG_ALRT_FIELD::BUSUL) |
+                         bit(DIAG_ALRT_FIELD::POL);
+
   ConfigurePorts();
 
   for (size_t i = 0; i < 5; i++)
@@ -731,7 +746,39 @@ uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity)
       break;
     }
 
+      //Output bits for relay_trigger_bitmap
     case 8:
+    {
+      outcome = relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::TMPOL);
+      break;
+    }
+    case 9:
+    {
+      outcome = relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::SHNTOL);
+      break;
+    }
+    case 10:
+    {
+      outcome = relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::SHNTUL);
+      break;
+    }
+    case 11:
+    {
+      outcome = relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::BUSOL);
+      break;
+    }
+    case 12:
+    {
+      outcome = relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::BUSUL);
+      break;
+    }
+    case 13:
+    {
+      outcome = relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::POL);
+      break;
+    }
+
+    case 14:
     {
       outcome = relay_state;
       break;
@@ -761,12 +808,6 @@ uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity)
 
 uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
 {
-  //Lets start with zeros in the buffer
-  //memset(sendbuff, 0, sizeof(sendbuff));
-
-  //sendbuff[0] = ModbusSlaveAddress; // slv addr
-  //sendbuff[1] = 0x03;               // fcode
-
   //Populate data from byte 3...
   uint8_t ptr = 3;
 
@@ -855,20 +896,26 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
 
     case 9:
     {
-      //Power
-      p = Power();
-      extractHighWord(&p, ptr);
+      //Spare!
       break;
     }
 
     case 10:
     {
       //Power
-      extractLowWord(&p, ptr);
+      p = Power();
+      extractHighWord(&p, ptr);
       break;
     }
 
     case 11:
+    {
+      //Power
+      extractLowWord(&p, ptr);
+      break;
+    }
+
+    case 12:
     {
       //Shunt mV
       shuntv = ShuntVoltage();
@@ -876,10 +923,55 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
       break;
     }
 
-    case 12:
+    case 13:
     {
       //Shunt mV
       extractLowWord(&shuntv, ptr);
+      break;
+    }
+
+    case 14:
+    {
+      extractHighWord(&CURRENT_LSB, ptr);
+      break;
+    }
+
+    case 15:
+    {
+      extractLowWord(&CURRENT_LSB, ptr);
+      break;
+    }
+    case 16:
+    {
+      extractHighWord(&RSHUNT, ptr);
+      break;
+    }
+
+    case 17:
+    {
+      extractLowWord(&RSHUNT, ptr);
+      break;
+    }
+
+    case 18:
+    {
+      sendbuff[ptr] = (uint8_t)(shunt_max_current >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(shunt_max_current & 0x00FF);
+      break;
+    }
+    case 19:
+    {
+      sendbuff[ptr] = (uint8_t)(shunt_millivolt >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(shunt_millivolt & 0x00FF);
+      break;
+    }
+
+    case 20:
+    {
+      //SHUNT_CAL register
+      uint16_t shunt_cal_value = i2c_readword(INA_REGISTER::SHUNT_CAL);
+      sendbuff[ptr] = (uint8_t)(shunt_cal_value >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(shunt_cal_value & 0x00FF);
       break;
     }
 
@@ -944,6 +1036,19 @@ void loop()
     if (alert == 0)
     {
       RedLED(false);
+    }
+
+    //Apply relay_trigger_bitmap bitmask over the top of the alerts, so we only trigger on specific events
+    relay_state = ((alert & relay_trigger_bitmap)  != 0);
+
+    //Turn relay on/off
+    if (relay_state)
+    {
+      PORTA.OUTSET = RELAY_PIN_BITMAP;
+    }
+    else
+    {
+      PORTA.OUTCLR = RELAY_PIN_BITMAP;
     }
   }
 
