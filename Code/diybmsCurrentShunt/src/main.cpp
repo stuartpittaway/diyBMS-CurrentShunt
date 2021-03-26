@@ -86,6 +86,12 @@ bool relay_state = false;
 //uses the same values/mapping as enum DIAG_ALRT_FIELD
 uint16_t relay_trigger_bitmap = 0;
 
+double amphour_in = 0;
+double amphour_out = 0;
+
+volatile bool ALERT_TRIGGERED = false;
+uint16_t alert = 0;
+
 enum INA_REGISTER : uint8_t
 {
   CONFIG = 0,
@@ -232,12 +238,11 @@ void EnableWatchdog()
 {
   wdt_triggered = false;
 
-  // Setup a watchdog timer for 2 seconds
+  // Enter protection mode
   CCP = 0xD8;
 
-  //2 seconds
-  WDT.CTRLA = WDT_PERIOD_enum::WDT_PERIOD_4KCLK_gc;
-  //WDT.CTRLA = WDT_PERIOD_enum::WDT_PERIOD_128CLK_gc;
+  //8 seconds
+  WDT.CTRLA = WDT_PERIOD_enum::WDT_PERIOD_8KCLK_gc;
 
   wdt_reset();
 }
@@ -252,6 +257,7 @@ void EnableSerial0TX()
 {
   //When the transmitter is disabled, it will no longer override the TXD pin, and the pin
   //direction is automatically set as input by hardware, even if it was configured as output by the user
+  //PB2 as OUTPUT
   PORTB.DIRSET = PIN2_bm;
   USART0.CTRLB |= USART_TXEN_bm; /* Transmitter Enable bit mask. */
 }
@@ -495,6 +501,7 @@ void ConfigureI2C()
   uint16_t BusOvervoltageThreshold = (uint16_t)(12.0F / 0.003125F) & 0x7FFFU;
   i2c_writeword(INA_REGISTER::BOVL, BusOvervoltageThreshold);
 
+  //5Volt
   //uint16_t BusUndervoltageThreshold = (uint16_t)(5.0F / 0.003125F) & 0x7FFFU;
   //i2c_writeword(INA_REGISTER::BUVL, BusUndervoltageThreshold);
 
@@ -509,13 +516,13 @@ void ConfigureI2C()
   //Conversion Factor: 1.25 µV/LSB when ADCRANGE = 1.
 
   //Alert over current at 0.725A
-  const double x = (0.725 / full_scale_current) * full_scale_adc;
-  int16_t CurrentOverThreshold = (x * 1000.0 / 1.24);
+  const double x = (1.0 / full_scale_current) * full_scale_adc;
+  int16_t CurrentOverThreshold = (x * 1000.0 / 1.25);
   i2c_writeword(INA_REGISTER::SOVL, CurrentOverThreshold);
 
   //Negative (limit current whilst charging)
-  const double y = (-0.725 / full_scale_current) * full_scale_adc;
-  int16_t CurrentUnderThreshold = (y * 1000.0 / 1.24);
+  const double y = (-0.500 / full_scale_current) * full_scale_adc;
+  int16_t CurrentUnderThreshold = (y * 1000.0 / 1.25);
   i2c_writeword(INA_REGISTER::SUVL, CurrentUnderThreshold);
 }
 
@@ -631,11 +638,6 @@ double Current()
   //Calculated current output in Amperes. Two's complement value.
   return CURRENT_LSB * (double)i2c_readInt24(INA_REGISTER::CURRENT);
 }
-
-double amphour_in = 0;
-double amphour_out = 0;
-
-volatile bool ALERT_TRIGGERED = false;
 
 ISR(PORTB_PORT_vect)
 {
@@ -817,6 +819,11 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
   double p = 0;
   double shuntv = 0;
 
+  double BusOverVolt = 0;
+  double BusUnderVolt = 0;
+  double ShuntOverCurrentLimit = 0;
+  double ShuntUnderCurrentLimit = 0;
+
   //Safety check, only return max 32 registers
   if (quantity > 32)
   {
@@ -975,6 +982,109 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
       break;
     }
 
+    case 21:
+    {
+      //register
+      uint16_t value = i2c_readword(INA_REGISTER::PWR_LIMIT);
+      sendbuff[ptr] = (uint8_t)(value >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(value & 0x00FF);
+      break;
+    }
+
+    case 22:
+    {
+      //Sets the threshold for comparison of the value to detect Bus Overvoltage (overvoltage protection).
+      //Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
+      BusOverVolt = (double)i2c_readword(INA_REGISTER::BOVL) * 0.003125F;
+      extractHighWord(&BusOverVolt, ptr);
+      break;
+    }
+
+    case 23:
+    {
+      extractLowWord(&BusOverVolt, ptr);
+      break;
+    }
+
+    case 24:
+    {
+      BusUnderVolt = (double)i2c_readword(INA_REGISTER::BUVL) * 0.003125F;
+      extractHighWord(&BusUnderVolt, ptr);
+      break;
+    }
+
+    case 25:
+    {
+      extractLowWord(&BusUnderVolt, ptr);
+      break;
+    }
+
+    case 26:
+    {
+      //Shunt Over Voltage Limit (current limit)
+      int16_t value = i2c_readword(INA_REGISTER::SOVL);
+
+      //const double x = (0.725 / full_scale_current) * full_scale_adc;
+      //int16_t CurrentOverThreshold = (x * 1000.0 / 1.24);
+
+  //1.25 µV/LSB
+      ShuntOverCurrentLimit = ((double)value/ 1000 * 1.25 ) / full_scale_adc * full_scale_current;
+
+      extractHighWord(&ShuntOverCurrentLimit, ptr);
+      break;
+    }
+    case 27:
+    {
+      extractLowWord(&ShuntOverCurrentLimit, ptr);
+      break;
+    }
+
+    case 28:
+    {
+      //Shunt Over Voltage Limit (current limit)
+      int16_t value = i2c_readword(INA_REGISTER::SUVL);
+
+      //const double x = (0.725 / full_scale_current) * full_scale_adc;
+      //int16_t CurrentOverThreshold = (x * 1000.0 / 1.24);
+
+      ShuntUnderCurrentLimit = ((double)value/ 1000 * 1.25 ) / full_scale_adc * full_scale_current;
+
+      extractHighWord(&ShuntUnderCurrentLimit, ptr);
+      break;
+    }
+    case 29:
+    {
+      extractLowWord(&ShuntUnderCurrentLimit, ptr);
+      break;
+    }
+
+      //These settings would probably be better in a 0x2B function code
+      //https://modbus.org/docs/Modbus_Application_Protocol_V1_1b.pdf
+    case 49:
+    {
+      //GITHUB version
+      sendbuff[ptr] = (uint8_t)(GIT_VERSION_B1 >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(GIT_VERSION_B1 & 0x00FF);
+      break;
+    }
+    case 50:
+    {
+      //GITHUB version
+      sendbuff[ptr] = (uint8_t)(GIT_VERSION_B2 >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(GIT_VERSION_B2 & 0x00FF);
+      break;
+    }
+
+    case 51:
+    {
+      //INAXXX chip model number (should always be 0x0228)
+      int16_t dieid = i2c_readword(INA_REGISTER::DIE_ID);
+      dieid = (dieid & 0xFFF0) >> 4;
+      sendbuff[ptr] = (uint8_t)(dieid >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(dieid & 0x00FF);
+      break;
+    }
+
     default:
     {
       break;
@@ -1015,11 +1125,30 @@ uint16_t ModbusRTU_CRC(uint8_t *buf, uint8_t len)
   return crc;
 }
 
-volatile uint16_t alert = 0;
-
 void loop()
 {
   wdt_reset();
+
+  /*
+  //Enable interrupts
+  sei();
+  //Start frame detection
+  USART0.CTRLB |= USART_SFDEN_bm;
+
+  //Switch off TX, saves current
+  //DisableSerial0TX();
+
+  if (!Serial.available())
+  {
+    //Enter sleep
+    set_sleep_mode(SLEEP_MODE_STANDBY);
+    sleep_enable();
+    sleep_cpu();
+
+    //Snoring can be heard at this point....
+    sleep_disable();
+  }
+*/
 
   if (ALERT_TRIGGERED)
   {
@@ -1039,7 +1168,7 @@ void loop()
     }
 
     //Apply relay_trigger_bitmap bitmask over the top of the alerts, so we only trigger on specific events
-    relay_state = ((alert & relay_trigger_bitmap)  != 0);
+    relay_state = ((alert & relay_trigger_bitmap) != 0);
 
     //Turn relay on/off
     if (relay_state)
@@ -1076,6 +1205,8 @@ void loop()
       uint16_t calculatedCRC = ModbusRTU_CRC(modbus, 6);
       if (crc16 == calculatedCRC)
       {
+        //EnableSerial0TX();
+
         //Prepare reply buffer
         memset(sendbuff, 0, sizeof(sendbuff));
         sendbuff[0] = ModbusSlaveAddress; // slv addr
