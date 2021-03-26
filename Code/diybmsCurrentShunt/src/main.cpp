@@ -702,92 +702,182 @@ void SendModbusData(uint8_t *sendbuff, const uint8_t len)
 
 uint8_t sendbuff[128];
 
+void extractHighWord(double *value, const uint8_t index)
+{
+  //Convert double to an array of bytes
+  uint8_t *i = (uint8_t *)value;
+  sendbuff[index] = i[0 + 1];
+  sendbuff[index + 1] = i[0 + 0];
+}
+
+void extractLowWord(double *value, const uint8_t index)
+{
+  //Convert double to an array of bytes
+  uint8_t *i = (uint8_t *)value;
+  sendbuff[index] = i[2 + 1];
+  sendbuff[index + 1] = i[2 + 0];
+}
+
 void ReadHoldingRegisters(uint16_t address, uint16_t quantity)
 {
+  /*
   debugSerial.print("R.H.R ");
   debugSerial.print(" add=");
   debugSerial.print(address, HEX);
   debugSerial.print(" qty=");
   debugSerial.print(quantity, HEX);
   debugSerial.println();
+*/
+  //Lets start with zeros in the buffer
+  memset(sendbuff, 0, sizeof(sendbuff));
 
   sendbuff[0] = ModbusSlaveAddress; // slv addr
   sendbuff[1] = 0x03;               // fcode
 
+  //Populate data from byte 3...
   uint8_t ptr = 3;
 
+  //Temporary variables to hold the register data
   double v = 0;
-  uint8_t *v2 = (uint8_t *)&v;
-
   double c = 0;
-  uint8_t *c2 = (uint8_t *)&c;
-
   double p = 0;
-  uint8_t *p2 = (uint8_t *)&p;
+  double shuntv = 0;
+
+  //Safety check, only return max 32 registers
+  if (quantity > 32)
+  {
+    quantity = 32;
+  }
 
   for (size_t i = address; i < address + quantity; i++)
   {
-    if (i == 0)
+    switch (i)
     {
-      //Address zero, top 16 bits of voltage
+    case 0:
+    {
+      //Voltage
       v = BusVoltage();
-      sendbuff[ptr] = v2[1];
-      ptr++;
-      sendbuff[ptr] = v2[0];
-      ptr++;
+      extractHighWord(&v, ptr);
+      break;
     }
 
-    if (i == 1)
+    case 1:
     {
-      //Address one, bottom 16 bits of voltage
-      sendbuff[ptr] = v2[3];
-      ptr++;
-      sendbuff[ptr] = v2[2];
-      ptr++;
+      //Voltage
+      extractLowWord(&v, ptr);
+      break;
     }
 
-    if (i == 2)
+    case 2:
     {
       //Current
       c = Current();
-      sendbuff[ptr] = c2[1];
-      ptr++;
-      sendbuff[ptr] = c2[0];
-      ptr++;
+      extractHighWord(&c, ptr);
+      break;
     }
 
-    if (i == 3)
+    case 3:
     {
       //Current
-      sendbuff[ptr] = c2[3];
-      ptr++;
-      sendbuff[ptr] = c2[2];
-      ptr++;
-    }    
+      extractLowWord(&c, ptr);
+      break;
+    }
 
-    if (i == 4)
+    case 4:
+    {
+      //amphour_out
+      extractHighWord(&amphour_out, ptr);
+      break;
+    }
+
+    case 5:
+    {
+      //amphour_out
+      extractLowWord(&amphour_out, ptr);
+      break;
+    }
+
+    case 6:
+    {
+      //amphour_in
+      extractHighWord(&amphour_in, ptr);
+      break;
+    }
+
+    case 7:
+    {
+      //amphour_in
+      extractLowWord(&amphour_in, ptr);
+      break;
+    }
+
+    case 8:
+    {
+      //temperature
+      int16_t t = (int16_t)DieTemperature();
+      sendbuff[ptr] = (uint8_t)(t >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(t & 0x00FF);
+      break;
+    }
+
+    case 9:
+    {
+      //Strip out all the bits that can be reported,
+      //TMPOL, SHNTOL, SHNTUL, BUSOL, BUSUL, POL
+
+      uint16_t value = diag_alrt_value & (bit(DIAG_ALRT_FIELD::TMPOL) |
+                                          bit(DIAG_ALRT_FIELD::SHNTOL) |
+                                          bit(DIAG_ALRT_FIELD::SHNTUL) |
+                                          bit(DIAG_ALRT_FIELD::BUSOL) |
+                                          bit(DIAG_ALRT_FIELD::BUSUL) |
+                                          bit(DIAG_ALRT_FIELD::POL));
+      sendbuff[ptr] = (uint8_t)(value >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(value & 0x00FF);
+      break;
+    }
+
+    case 10:
     {
       //Power
       p = Power();
-      sendbuff[ptr] = p2[1];
-      ptr++;
-      sendbuff[ptr] = p2[0];
-      ptr++;
+      extractHighWord(&p, ptr);
+      break;
     }
 
-    if (i == 5)
+    case 11:
     {
-      sendbuff[ptr] = p2[3];
-      ptr++;
-      sendbuff[ptr] = p2[2];
-      ptr++;
-    }    
+      //Power
+      extractLowWord(&p, ptr);
+      break;
+    }
 
-  }
+    case 12:
+    {
+      //Shunt mV
+      shuntv = ShuntVoltage();
+      extractHighWord(&shuntv, ptr);
+      break;
+    }
+
+    case 13:
+    {
+      //Shunt mV
+      extractLowWord(&shuntv, ptr);
+      break;
+    }
+
+
+    default:
+    {
+      break;
+    }
+    } //end switch
+
+    ptr += 2;
+  } //end for
 
   sendbuff[2] = ptr - 3;
 
-  //5 & 6 =
   SendModbusData(&sendbuff[0], ptr);
 }
 
@@ -831,31 +921,31 @@ void loop()
 
     if (diag_alrt_value & bit(DIAG_ALRT_FIELD::BUSOL))
     {
-      debugSerial.print(" Over-V ");
+      //debugSerial.print(" Over-V ");
       err_count++;
     }
 
     if (diag_alrt_value & bit(DIAG_ALRT_FIELD::BUSUL))
     {
-      debugSerial.print(" Under-V ");
+      //debugSerial.print(" Under-V ");
       err_count++;
     }
 
     if (diag_alrt_value & bit(DIAG_ALRT_FIELD::SHNTOL))
     {
-      debugSerial.print(" Over-C ");
+      //debugSerial.print(" Over-C ");
       err_count++;
     }
 
     if (diag_alrt_value & bit(DIAG_ALRT_FIELD::SHNTUL))
     {
-      debugSerial.print(" Under-C ");
+      //debugSerial.print(" Under-C ");
       err_count++;
     }
 
     if (diag_alrt_value & bit(DIAG_ALRT_FIELD::POL))
     {
-      debugSerial.print(" Over-P ");
+      //debugSerial.print(" Over-P ");
       err_count++;
     }
 
@@ -938,8 +1028,8 @@ void loop()
     double voltage = BusVoltage();
     //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
     double current = Current();
-    double temperature = DieTemperature();
     double power = Power();
+    double temperature = DieTemperature();
     double shuntv = ShuntVoltage();
     //double energy_joules = Energy();
     double charge_coulombs = Charge();
