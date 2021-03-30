@@ -69,11 +69,11 @@ with open(os.path.join(include_dir, 'EmbeddedFiles_Defines.h'), 'w') as f:
     # dt=datetime.datetime.utcnow()
     dt=datetime.datetime.utcfromtimestamp(int(git_datetime))
 
-    f.write("const char COMPILE_DATE_TIME[] = \"")
+    f.write("const char COMPILE_DATE_TIME_UTC[] = \"")
     f.write(dt.isoformat()[:-3]+'Z')
     f.write("\";\n\n")
 
-    f.write("const uint32_t COMPILE_DATE_TIME_EPOCH = ")
+    f.write("const uint32_t COMPILE_DATE_TIME_UTC_EPOCH = ")
     f.write(git_datetime.__str__())
     f.write("UL;\n\n")
 
