@@ -823,11 +823,12 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
   double BusUnderVolt = 0;
   double ShuntOverCurrentLimit = 0;
   double ShuntUnderCurrentLimit = 0;
+  double PowerLimit = 0;
 
   //Safety check, only return max 32 registers
-  if (quantity > 32)
+  if (quantity > 48)
   {
-    quantity = 32;
+    quantity = 48;
   }
 
   for (size_t i = address; i < address + quantity; i++)
@@ -984,10 +985,10 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
 
     case 21:
     {
-      //register
-      uint16_t value = i2c_readword(INA_REGISTER::PWR_LIMIT);
-      sendbuff[ptr] = (uint8_t)(value >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(value & 0x00FF);
+      //temperature limit
+      int16_t t = i2c_readword(INA_REGISTER::TEMP_LIMIT);
+      sendbuff[ptr] = (uint8_t)(t >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(t & 0x00FF);
       break;
     }
 
@@ -1027,8 +1028,8 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
       //const double x = (0.725 / full_scale_current) * full_scale_adc;
       //int16_t CurrentOverThreshold = (x * 1000.0 / 1.24);
 
-  //1.25 µV/LSB
-      ShuntOverCurrentLimit = ((double)value/ 1000 * 1.25 ) / full_scale_adc * full_scale_current;
+      //1.25 µV/LSB
+      ShuntOverCurrentLimit = ((double)value / 1000 * 1.25) / full_scale_adc * full_scale_current;
 
       extractHighWord(&ShuntOverCurrentLimit, ptr);
       break;
@@ -1047,7 +1048,7 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
       //const double x = (0.725 / full_scale_current) * full_scale_adc;
       //int16_t CurrentOverThreshold = (x * 1000.0 / 1.24);
 
-      ShuntUnderCurrentLimit = ((double)value/ 1000 * 1.25 ) / full_scale_adc * full_scale_current;
+      ShuntUnderCurrentLimit = ((double)value / 1000 * 1.25) / full_scale_adc * full_scale_current;
 
       extractHighWord(&ShuntUnderCurrentLimit, ptr);
       break;
@@ -1055,6 +1056,20 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
     case 29:
     {
       extractLowWord(&ShuntUnderCurrentLimit, ptr);
+      break;
+    }
+
+    case 30:
+    {
+      //Shunt Over Voltage Limit (current limit)
+      uint16_t value = i2c_readword(INA_REGISTER::PWR_LIMIT);
+      PowerLimit = value * 256;
+      extractHighWord(&PowerLimit, ptr);
+      break;
+    }
+    case 31:
+    {
+      extractLowWord(&PowerLimit, ptr);
       break;
     }
 
@@ -1077,8 +1092,24 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
 
     case 51:
     {
+      //COMPILE_DATE_TIME_EPOCH
+      sendbuff[ptr] = (uint8_t)(COMPILE_DATE_TIME_EPOCH >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(COMPILE_DATE_TIME_EPOCH & 0x00FF);
+      break;
+    }
+    case 52:
+    {
+      //COMPILE_DATE_TIME_EPOCH
+      uint16_t x = COMPILE_DATE_TIME_EPOCH >> 16;
+      sendbuff[ptr] = (uint8_t)(x >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
+      break;
+    }
+
+    case 53:
+    {
       //INAXXX chip model number (should always be 0x0228)
-      int16_t dieid = i2c_readword(INA_REGISTER::DIE_ID);
+      uint16_t dieid = i2c_readword(INA_REGISTER::DIE_ID);
       dieid = (dieid & 0xFFF0) >> 4;
       sendbuff[ptr] = (uint8_t)(dieid >> 8);
       sendbuff[ptr + 1] = (uint8_t)(dieid & 0x00FF);
