@@ -1093,16 +1093,15 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
     case 51:
     {
       //COMPILE_DATE_TIME_EPOCH
-      sendbuff[ptr] = (uint8_t)(COMPILE_DATE_TIME_EPOCH >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(COMPILE_DATE_TIME_EPOCH & 0x00FF);
+      sendbuff[ptr] = (uint8_t)(COMPILE_DATE_TIME_UTC_EPOCH >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(COMPILE_DATE_TIME_UTC_EPOCH & 0x00FF);
       break;
     }
     case 52:
     {
       //COMPILE_DATE_TIME_EPOCH
-      uint16_t x = COMPILE_DATE_TIME_EPOCH >> 16;
-      sendbuff[ptr] = (uint8_t)(x >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
+      sendbuff[ptr] = (uint8_t)(COMPILE_DATE_TIME_UTC_EPOCH >> 24);
+      sendbuff[ptr + 1] = (uint8_t)(COMPILE_DATE_TIME_UTC_EPOCH >> 16 & 0x00FF);
       break;
     }
 
