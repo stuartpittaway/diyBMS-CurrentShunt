@@ -30,8 +30,8 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 // ATTINY1614 (tinyAVR® 1-series of microcontrollers)
 // http://ww1.microchip.com/downloads/en/DeviceDoc/ATtiny1614-data-sheet-40001995A.pdf
 
-//MODBUS Protocol
-//https://www.ni.com/en-gb/innovations/white-papers/14/the-modbus-protocol-in-depth.html
+// MODBUS Protocol
+// https://www.ni.com/en-gb/innovations/white-papers/14/the-modbus-protocol-in-depth.html
 
 #if !defined(MODBUSDEFAULTBAUDRATE)
 #error MODBUSDEFAULTBAUDRATE must be defined
@@ -48,6 +48,12 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 #include <avr/power.h>
 #include <avr/wdt.h>
 #include <Wire.h>
+#include <EEPROM.h>
+
+#include "main.h"
+#include "settings.h"
+
+#include "modbuscrc.h"
 
 #include "EmbeddedFiles_Defines.h"
 
@@ -82,64 +88,21 @@ uint8_t sendbuff[128];
 
 bool relay_state = false;
 
-//Holds what alert events trigger the relay to turn on/high
-//uses the same values/mapping as enum DIAG_ALRT_FIELD
-uint16_t relay_trigger_bitmap = 0;
+struct eeprom_regs
+{
+
+  //Holds what alert events trigger the relay to turn on/high
+  //uses the same values/mapping as enum DIAG_ALRT_FIELD
+  uint16_t relay_trigger_bitmap = 0;
+};
+
+eeprom_regs registers;
 
 double amphour_in = 0;
 double amphour_out = 0;
 
 volatile bool ALERT_TRIGGERED = false;
 uint16_t alert = 0;
-
-enum INA_REGISTER : uint8_t
-{
-  CONFIG = 0,
-  ADC_CONFIG = 1,
-  SHUNT_CAL = 2,    //Shunt Calibration
-  SHUNT_TEMPCO = 3, //Shunt Temperature Coefficient
-  VSHUNT = 4,       //Shunt Voltage Measurement 24bit
-  VBUS = 5,         //Bus Voltage Measurement 24bit
-  DIETEMP = 6,
-  CURRENT = 7,   //Current Result 24bit
-  POWER = 8,     //Power Result 24bit
-  ENERGY = 9,    //Energy Result 40bit
-  CHARGE = 0x0A, //Charge Result 40bit
-  DIAG_ALRT = 0x0b,
-  SOVL = 0x0c, //Shunt Overvoltage Threshold
-  SUVL = 0x0d, //Shunt Undervoltage Threshold
-  BOVL = 0x0e, //Bus Overvoltage Threshold
-  BUVL = 0x0f, //Bus Undervoltage Threshold
-  TEMP_LIMIT = 0x10,
-  PWR_LIMIT = 0x11,
-  MANUFACTURER_ID = 0xFE,
-  DIE_ID = 0xFF
-};
-
-enum DIAG_ALRT_FIELD : uint16_t
-{
-  ALATCH = 15,
-  CNVR = 14,
-  SLOWALERT = 13,
-  APOL = 12,
-  ENERGYOF = 11,
-  CHARGEOF = 10,
-  MATHOF = 9,
-  RESERVED = 8,
-  TMPOL = 7,
-  SHNTOL = 6,
-  SHNTUL = 5,
-  BUSOL = 4,
-  BUSUL = 3,
-  POL = 2,
-  CNVRF = 1,
-  MEMSTAT = 0
-};
-
-void RedLED(bool value);
-void GreenLED(bool value);
-void printBit16(uint16_t b);
-uint16_t ModbusRTU_CRC(uint8_t *buf, uint8_t len);
 
 volatile bool wdt_triggered = false;
 volatile uint16_t wdt_triggered_count;
@@ -540,7 +503,7 @@ void setup()
   }
 
   //By default, trigger relay on all alerts
-  relay_trigger_bitmap = bit(DIAG_ALRT_FIELD::TMPOL) |
+  registers.relay_trigger_bitmap = bit(DIAG_ALRT_FIELD::TMPOL) |
                          bit(DIAG_ALRT_FIELD::SHNTOL) |
                          bit(DIAG_ALRT_FIELD::SHNTUL) |
                          bit(DIAG_ALRT_FIELD::BUSOL) |
@@ -548,6 +511,7 @@ void setup()
                          bit(DIAG_ALRT_FIELD::POL);
 
   ConfigurePorts();
+  EnableWatchdog();
 
   for (size_t i = 0; i < 5; i++)
   {
@@ -565,8 +529,7 @@ void setup()
     delay(150);
   }
 
-  EnableWatchdog();
-
+  //ReadConfigFromEEPROM
   //ReadJumperPins();
 
   //Disable RS485 receiver (debug!)
@@ -751,32 +714,32 @@ uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity)
       //Output bits for relay_trigger_bitmap
     case 8:
     {
-      outcome = relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::TMPOL);
+      outcome = registers.relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::TMPOL);
       break;
     }
     case 9:
     {
-      outcome = relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::SHNTOL);
+      outcome = registers.relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::SHNTOL);
       break;
     }
     case 10:
     {
-      outcome = relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::SHNTUL);
+      outcome = registers.relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::SHNTUL);
       break;
     }
     case 11:
     {
-      outcome = relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::BUSOL);
+      outcome = registers.relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::BUSOL);
       break;
     }
     case 12:
     {
-      outcome = relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::BUSUL);
+      outcome = registers.relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::BUSUL);
       break;
     }
     case 13:
     {
-      outcome = relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::POL);
+      outcome = registers.relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::POL);
       break;
     }
 
@@ -1131,30 +1094,6 @@ unsigned long timer = 0;
 
 #define combineBytes(high, low) (high << 8) + low
 
-// Compute the MODBUS RTU CRC
-uint16_t ModbusRTU_CRC(uint8_t *buf, uint8_t len)
-{
-  uint16_t crc = 0xFFFF;
-
-  for (uint8_t pos = 0; pos < len; pos++)
-  {
-    crc ^= (uint16_t)buf[pos]; // XOR byte into least sig. byte of crc
-
-    for (uint8_t i = 8; i != 0; i--)
-    { // Loop over each bit
-      if ((crc & 0x0001) != 0)
-      {            // If the LSB is set
-        crc >>= 1; // Shift right and XOR 0xA001
-        crc ^= 0xA001;
-      }
-      else         // Else LSB is not set
-        crc >>= 1; // Just shift right
-    }
-  }
-  // Note, this number has low and high bytes swapped, so use it accordingly (or swap bytes)
-  return crc;
-}
-
 void loop()
 {
   wdt_reset();
@@ -1198,7 +1137,7 @@ void loop()
     }
 
     //Apply relay_trigger_bitmap bitmask over the top of the alerts, so we only trigger on specific events
-    relay_state = ((alert & relay_trigger_bitmap) != 0);
+    relay_state = ((alert & registers.relay_trigger_bitmap) != 0);
 
     //Turn relay on/off
     if (relay_state)
