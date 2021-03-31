@@ -187,7 +187,7 @@ void ReadJumperPins()
 
   if (AddressJumper == false)
   {
-    //Its connected
+    //Jumper connected, increase address by 8
     ModbusSlaveAddress += 8;
   }
 
@@ -233,10 +233,11 @@ void EnableWatchdog()
   wdt_reset();
 }
 
+/*
 void DisableSerial0TX()
 {
   //On tiny1614 this saves about 10mA of current
-  USART0.CTRLB &= ~(USART_TXEN_bm); /* Transmitter Enable bit mask. */
+  USART0.CTRLB &= ~(USART_TXEN_bm); // Transmitter Enable bit mask.
 }
 
 void EnableSerial0TX()
@@ -245,8 +246,9 @@ void EnableSerial0TX()
   //direction is automatically set as input by hardware, even if it was configured as output by the user
   //PB2 as OUTPUT
   PORTB.DIRSET = PIN2_bm;
-  USART0.CTRLB |= USART_TXEN_bm; /* Transmitter Enable bit mask. */
+  USART0.CTRLB |= USART_TXEN_bm; // Transmitter Enable bit mask. 
 }
+*/
 
 void WatchdogTriggered()
 {
@@ -265,7 +267,6 @@ bool i2c_writeword(const uint8_t inareg, const uint16_t data)
 
   //Delay after making a write to INA chip
   delayMicroseconds(10);
-
   return result == 0;
 }
 
@@ -289,6 +290,7 @@ uint32_t i2c_readUint24(const uint8_t inareg)
   Wire.beginTransmission(INA228_I2C_Address);
   Wire.write(inareg);
   Wire.endTransmission();
+
   delayMicroseconds(10);
   Wire.requestFrom(INA228_I2C_Address, (uint8_t)3); // Request 3 bytes
 
@@ -378,9 +380,9 @@ void i2c_error()
   {
     wdt_reset();
     RedLED(true);
-    delay(100);
+    delay(50);
     RedLED(false);
-    delay(100);
+    delay(50);
   }
 
   //Finally just hang - this will trigger the watchdog causing a reboot
@@ -394,7 +396,7 @@ void ResetChargeEnergyRegisters()
   //0h = Normal Operation
   //1h = Clears registers to default values for ENERGY and CHARGE registers
 
-  if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG | _BV(14)))
+  if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG | 0x1000))
   {
     i2c_error();
   }
@@ -475,8 +477,6 @@ void ConfigureI2C()
     i2c_error();
   }
 
-  SetINA228Registers();
-
   /*
   //Sets the threshold for comparison of the value to detect Bus Overvoltage (overvoltage protection).
   //Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
@@ -530,14 +530,28 @@ void setup()
   }
 
   ConfigurePorts();
+  RedLED(false);
+  GreenLED(false);
   EnableWatchdog();
 
-  if (!ReadConfigFromEEPROM((uint8_t *)&registers, sizeof(eeprom_regs)))
+  if (ReadConfigFromEEPROM((uint8_t *)&registers, sizeof(eeprom_regs)) == false)
   {
+    //Flash RED led 5 times to indicate facory reset
+    for (size_t i = 0; i < 5; i++)
+    {
+      RedLED(true);
+      delay(200);
+      RedLED(false);
+      delay(200);
+    }
+
     //EEPROM is invalid, so apply "factory" defaults
 
+    //Clear structure
+    memset(&registers, 0, sizeof(eeprom_regs));
+
     //RESET, RSTACC & Enable ADCRANGE = 40.96mV scale
-    registers.R_CONFIG = _BV(15) | _BV(14) | _BV(4);
+    registers.R_CONFIG = 0xC010; //_BV(15) | _BV(14) | _BV(4);
 
     //Conversion times for voltage and current = 2074us
     //temperature = 540us
@@ -551,34 +565,28 @@ void setup()
     //                   AVG
     registers.R_ADC_CONFIG = 0xFDA5;
 
-    registers.R_SHUNT_CAL = 0x1000; //Default 150A shunt @ 50mV scale
-
+    //Default 150A shunt @ 50mV scale
+    registers.R_SHUNT_CAL = 0x1000;
     registers.shunt_max_current = 150;
     registers.shunt_millivolt = 50;
 
     //SLOWALERT = Wait for full sample averaging time before triggering alert (about 1.5 seconds)
     registers.R_DIAG_ALRT = bit(DIAG_ALRT_FIELD::SLOWALERT);
 
-    registers.R_SHUNT_TEMPCO = i2c_readword(INA_REGISTER::SHUNT_TEMPCO);
+    //This is not enabled by CONFIG
+    registers.R_SHUNT_TEMPCO = 0x1000;
 
     //Read the defaults from the INA228 chip as a starting point
-    registers.R_SOVL = i2c_readword(INA_REGISTER::SOVL);
-    registers.R_SUVL = i2c_readword(INA_REGISTER::SUVL);
+    registers.R_SOVL = 0x7FFF;
+    registers.R_SUVL = 0x8000;
     //85volt max
     registers.R_BOVL = 0x6A40; //i2c_readword(INA_REGISTER::BOVL);
-    registers.R_BUVL = i2c_readword(INA_REGISTER::BUVL);    
-    registers.R_TEMP_LIMIT = 0x2800;  //80 degrees C
-    registers.R_PWR_LIMIT = i2c_readword(INA_REGISTER::PWR_LIMIT);
+    registers.R_BUVL = 0;
+    registers.R_TEMP_LIMIT = 0x2800;    //80 degrees C
+    registers.R_PWR_LIMIT = 10000 >> 8; //10kW
 
     //By default, trigger relay on all alerts
     registers.relay_trigger_bitmap = ALL_ALERT_BITS;
-
-    //Calc CURRENT_LSB * RSHUNT ready for SHUNT_CAL
-    CalculateLSB();
-    // SHUNT_CAL = 13107.2x10^6 x CURRENT_LSB x RSHUNT
-    // SHUNT_CAL must be multiplied by 4 for ADCRANGE = 1
-    //Top 2 bits are not used
-    registers.R_SHUNT_CAL = ((uint16_t)((double)13107200000.0 * CURRENT_LSB * RSHUNT * (double)4.0)) & 0x3FFF;
   }
 
   for (size_t i = 0; i < 6; i++)
@@ -605,6 +613,7 @@ void setup()
   PORTB.PIN0CTRL = 0;
 
   ConfigureI2C();
+  SetINA228Registers();
 
   //Serial uses PB2/PB3 and PB0 for XDIR
   Serial.begin(ModBusBaudRate, MODBUSSERIALCONFIG);
@@ -862,7 +871,7 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
   double BusUnderVolt = 0;
   double ShuntOverCurrentLimit = 0;
   double ShuntUnderCurrentLimit = 0;
-  double PowerLimit = 0;
+  uint32_t PowerLimit = 0;
 
   //Safety check, only return max 32 registers
   if (quantity > 48)
@@ -943,7 +952,9 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
 
     case 9:
     {
-      //Spare!
+      //Watchdog timer trigger count (like error counter)
+      sendbuff[ptr] = (uint8_t)(wdt_triggered_count >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(wdt_triggered_count & 0x00FF);
       break;
     }
 
@@ -1064,9 +1075,6 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
       //Shunt Over Voltage Limit (current limit)
       int16_t value = i2c_readword(INA_REGISTER::SOVL);
 
-      //const double x = (0.725 / full_scale_current) * full_scale_adc;
-      //int16_t CurrentOverThreshold = (x * 1000.0 / 1.24);
-
       //1.25 µV/LSB
       ShuntOverCurrentLimit = ((double)value / 1000 * 1.25) / full_scale_adc * full_scale_current;
 
@@ -1101,14 +1109,17 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
     case 30:
     {
       //Shunt Over POWER LIMIT
-      uint16_t value = i2c_readword(INA_REGISTER::PWR_LIMIT);
-      PowerLimit = value * 256;
-      extractHighWord(&PowerLimit, ptr);
+      PowerLimit = (uint16_t)i2c_readword(INA_REGISTER::PWR_LIMIT);
+      PowerLimit = PowerLimit << 8;
+      //extractHighWord(&PowerLimit, ptr);
+      sendbuff[ptr] = ((uint8_t *)PowerLimit)[1];
+      sendbuff[ptr + 1] = ((uint8_t *)PowerLimit)[0];
       break;
     }
     case 31:
     {
-      extractLowWord(&PowerLimit, ptr);
+      sendbuff[ptr] = ((uint8_t *)PowerLimit)[3];
+      sendbuff[ptr + 1] = ((uint8_t *)PowerLimit)[2];
       break;
     }
 
@@ -1151,6 +1162,91 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
       dieid = (dieid & 0xFFF0) >> 4;
       sendbuff[ptr] = (uint8_t)(dieid >> 8);
       sendbuff[ptr + 1] = (uint8_t)(dieid & 0x00FF);
+      break;
+    }
+
+    case 61:
+    {
+      uint16_t x = i2c_readword(INA_REGISTER::CONFIG);
+      sendbuff[ptr] = (uint8_t)(x >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
+      break;
+    }
+    case 62:
+    {
+      uint16_t x = i2c_readword(INA_REGISTER::ADC_CONFIG);
+      sendbuff[ptr] = (uint8_t)(x >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
+      break;
+    }
+    case 63:
+    {
+      uint16_t x = i2c_readword(INA_REGISTER::SHUNT_CAL);
+      sendbuff[ptr] = (uint8_t)(x >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
+      break;
+    }
+    case 64:
+    {
+      uint16_t x = i2c_readword(INA_REGISTER::SHUNT_TEMPCO);
+      sendbuff[ptr] = (uint8_t)(x >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
+      break;
+    }
+    case 65:
+    {
+      uint16_t x = i2c_readword(INA_REGISTER::DIAG_ALRT);
+      sendbuff[ptr] = (uint8_t)(x >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
+      break;
+    }
+    case 66:
+    {
+      uint16_t x = i2c_readword(INA_REGISTER::SOVL);
+      sendbuff[ptr] = (uint8_t)(x >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
+      break;
+    }
+    case 67:
+    {
+      uint16_t x = i2c_readword(INA_REGISTER::SUVL);
+      sendbuff[ptr] = (uint8_t)(x >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
+      break;
+    }
+    case 68:
+    {
+      uint16_t x = i2c_readword(INA_REGISTER::BOVL);
+      sendbuff[ptr] = (uint8_t)(x >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
+      break;
+    }
+    case 69:
+    {
+      uint16_t x = i2c_readword(INA_REGISTER::BUVL);
+      sendbuff[ptr] = (uint8_t)(x >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
+      break;
+    }
+    case 70:
+    {
+      uint16_t x = i2c_readword(INA_REGISTER::TEMP_LIMIT);
+      sendbuff[ptr] = (uint8_t)(x >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
+      break;
+    }
+    case 71:
+    {
+      uint16_t x = i2c_readword(INA_REGISTER::PWR_LIMIT);
+      sendbuff[ptr] = (uint8_t)(x >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
+      break;
+    }
+    case 72:
+    {
+      uint16_t x = i2c_readword(INA_REGISTER::DIETEMP);
+      sendbuff[ptr] = (uint8_t)(x >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
       break;
     }
 
