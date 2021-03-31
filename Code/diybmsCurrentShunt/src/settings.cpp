@@ -47,5 +47,5 @@ bool ReadConfigFromEEPROM(uint8_t *settings, uint16_t size)
 void FactoryDefault(uint16_t size)
 {
   //Clear checksum
-  EEPROM.put(0, 0x0000);
+  EEPROM.put(0, 0xFFFF);
 }
