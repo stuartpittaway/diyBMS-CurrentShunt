@@ -259,10 +259,11 @@ void WatchdogTriggered()
 
 bool i2c_writeword(const uint8_t inareg, const uint16_t data)
 {
+  Wire.flush();
   Wire.beginTransmission(INA228_I2C_Address);
   Wire.write(inareg);
   Wire.write((uint8_t)(data >> 8)); // Write the first (MSB) byte
-  Wire.write((uint8_t)data);        // and then the second byte
+  Wire.write((uint8_t)data & 0x00FF);        // and then the second byte
   uint8_t result = Wire.endTransmission();
 
   //Delay after making a write to INA chip
@@ -277,6 +278,10 @@ int16_t i2c_readword(const uint8_t inareg)
   Wire.endTransmission();
   delayMicroseconds(10);
   Wire.requestFrom(INA228_I2C_Address, (uint8_t)2); // Request 2 bytes
+
+  while (!Wire.available())
+  {
+  };
 
   uint8_t a, b;
   a = Wire.read();
@@ -293,7 +298,9 @@ uint32_t i2c_readUint24(const uint8_t inareg)
 
   delayMicroseconds(10);
   Wire.requestFrom(INA228_I2C_Address, (uint8_t)3); // Request 3 bytes
-
+  while (!Wire.available())
+  {
+  };
   uint8_t a, b, c;
   a = Wire.read();
   b = Wire.read();
@@ -313,7 +320,9 @@ uint64_t i2c_readUint40(const uint8_t inareg)
   Wire.endTransmission();
   delayMicroseconds(10);
   Wire.requestFrom(INA228_I2C_Address, (uint8_t)5); // Request 5 bytes
-
+  while (!Wire.available())
+  {
+  };
   uint8_t a, b, c, d, e;
   a = Wire.read();
   b = Wire.read();
@@ -589,6 +598,12 @@ void setup()
     registers.relay_trigger_bitmap = ALL_ALERT_BITS;
   }
 
+  CalculateLSB();
+
+  ConfigureI2C();
+
+  SetINA228Registers();
+
   for (size_t i = 0; i < 6; i++)
   {
     GreenLED(true);
@@ -605,21 +620,19 @@ void setup()
     delay(150);
   }
 
-  CalculateLSB();
   //ReadJumperPins();
 
   //Disable RS485 receiver (debug!)
   PORTB.OUTSET = PIN0_bm;
   PORTB.PIN0CTRL = 0;
 
-  ConfigureI2C();
-  SetINA228Registers();
-
   //Serial uses PB2/PB3 and PB0 for XDIR
   Serial.begin(ModBusBaudRate, MODBUSSERIALCONFIG);
 
   //0x01= Enables RS-485 mode with control of an external line driver through a dedicated Transmit Enable (TE) pin.
   //USART0.CTRLA |= B00000001;
+
+  wdt_triggered = false;
 }
 
 double BusVoltage()
@@ -1165,84 +1178,84 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
       break;
     }
 
-    case 61:
+    case 59:
     {
-      uint16_t x = i2c_readword(INA_REGISTER::CONFIG);
+      uint16_t x = i2c_readword(INA_REGISTER::CONFIG);      
       sendbuff[ptr] = (uint8_t)(x >> 8);
       sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
       break;
     }
-    case 62:
+    case 60:
     {
       uint16_t x = i2c_readword(INA_REGISTER::ADC_CONFIG);
       sendbuff[ptr] = (uint8_t)(x >> 8);
       sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
       break;
     }
-    case 63:
+    case 61:
     {
       uint16_t x = i2c_readword(INA_REGISTER::SHUNT_CAL);
       sendbuff[ptr] = (uint8_t)(x >> 8);
       sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
       break;
     }
-    case 64:
+    case 62:
     {
       uint16_t x = i2c_readword(INA_REGISTER::SHUNT_TEMPCO);
       sendbuff[ptr] = (uint8_t)(x >> 8);
       sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
       break;
     }
-    case 65:
+    case 63:
     {
       uint16_t x = i2c_readword(INA_REGISTER::DIAG_ALRT);
       sendbuff[ptr] = (uint8_t)(x >> 8);
       sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
       break;
     }
-    case 66:
+    case 64:
     {
       uint16_t x = i2c_readword(INA_REGISTER::SOVL);
       sendbuff[ptr] = (uint8_t)(x >> 8);
       sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
       break;
     }
-    case 67:
+    case 65:
     {
       uint16_t x = i2c_readword(INA_REGISTER::SUVL);
       sendbuff[ptr] = (uint8_t)(x >> 8);
       sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
       break;
     }
-    case 68:
+    case 66:
     {
       uint16_t x = i2c_readword(INA_REGISTER::BOVL);
       sendbuff[ptr] = (uint8_t)(x >> 8);
       sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
       break;
     }
-    case 69:
+    case 67:
     {
       uint16_t x = i2c_readword(INA_REGISTER::BUVL);
       sendbuff[ptr] = (uint8_t)(x >> 8);
       sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
       break;
     }
-    case 70:
+    case 68:
     {
       uint16_t x = i2c_readword(INA_REGISTER::TEMP_LIMIT);
       sendbuff[ptr] = (uint8_t)(x >> 8);
       sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
       break;
     }
-    case 71:
+    case 69:
     {
       uint16_t x = i2c_readword(INA_REGISTER::PWR_LIMIT);
       sendbuff[ptr] = (uint8_t)(x >> 8);
       sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
       break;
     }
-    case 72:
+    case 70:
     {
       uint16_t x = i2c_readword(INA_REGISTER::DIETEMP);
       sendbuff[ptr] = (uint8_t)(x >> 8);
