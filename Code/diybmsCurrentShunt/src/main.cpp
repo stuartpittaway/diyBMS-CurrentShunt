@@ -62,20 +62,20 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 #define RELAY_PIN_BITMAP PIN5_bm
 
 //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
-uint16_t shunt_max_current = 150;
-uint16_t shunt_millivolt = 50;
+
 //Scale the full current based on 40.96mV (max range for 20bit ADC)
 //const double full_scale_current = shunt_max_current;
 
-double full_scale_adc = 40.96;
-double full_scale_current = ((double)shunt_max_current / (double)shunt_millivolt) * full_scale_adc;
-
-double CURRENT_LSB = full_scale_current / (double)0x80000;
-double RSHUNT = ((double)shunt_millivolt / 1000.0) / (double)shunt_max_current;
-
+const double full_scale_adc = 40.96;
 const double CoulombsToAmpHours = 0.00027778;
-
 const uint8_t INA228_I2C_Address{B1000000};
+
+const uint16_t ALL_ALERT_BITS = (bit(DIAG_ALRT_FIELD::TMPOL) |
+                                 bit(DIAG_ALRT_FIELD::SHNTOL) |
+                                 bit(DIAG_ALRT_FIELD::SHNTUL) |
+                                 bit(DIAG_ALRT_FIELD::BUSOL) |
+                                 bit(DIAG_ALRT_FIELD::BUSUL) |
+                                 bit(DIAG_ALRT_FIELD::POL));
 
 uint16_t ModBusBaudRate = MODBUSDEFAULTBAUDRATE;
 
@@ -111,9 +111,16 @@ struct eeprom_regs
   //Holds what alert events trigger the relay to turn on/high
   //uses the same values/mapping as enum DIAG_ALRT_FIELD
   uint16_t relay_trigger_bitmap = 0;
+
+  uint16_t shunt_max_current = 150;
+  uint16_t shunt_millivolt = 50;
 };
 
 eeprom_regs registers;
+
+double full_scale_current;
+double CURRENT_LSB;
+double RSHUNT;
 
 double amphour_in = 0;
 double amphour_out = 0;
@@ -126,7 +133,6 @@ volatile uint16_t wdt_triggered_count;
 
 void ConfigurePorts()
 {
-
   // PA1 = SDA
   // PA2 = SCL
   // PA3 = Baud Rate
@@ -383,15 +389,36 @@ void i2c_error()
 
 void ResetChargeEnergyRegisters()
 {
-  const uint16_t value = _BV(4) | _BV(14); //RSTACC & ADCRANGE
+  //BIT 14
+  //Resets the contents of accumulation registers ENERGY and CHARGE to 0
+  //0h = Normal Operation
+  //1h = Clears registers to default values for ENERGY and CHARGE registers
 
-  if (!i2c_writeword(INA_REGISTER::CONFIG, value))
+  if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG | _BV(14)))
   {
     i2c_error();
   }
 }
 
 volatile uint16_t diag_alrt_value = 0;
+
+void SetINA228Registers()
+{
+  uint8_t result = 0;
+  result += i2c_writeword(INA_REGISTER::SHUNT_CAL, registers.R_SHUNT_CAL);
+  result += i2c_writeword(INA_REGISTER::SHUNT_TEMPCO, registers.R_SHUNT_TEMPCO);
+  result += i2c_writeword(INA_REGISTER::SOVL, registers.R_SOVL);
+  result += i2c_writeword(INA_REGISTER::SUVL, registers.R_SUVL);
+  result += i2c_writeword(INA_REGISTER::BOVL, registers.R_BOVL);
+  result += i2c_writeword(INA_REGISTER::BUVL, registers.R_BUVL);
+  result += i2c_writeword(INA_REGISTER::TEMP_LIMIT, registers.R_TEMP_LIMIT);
+  result += i2c_writeword(INA_REGISTER::PWR_LIMIT, registers.R_PWR_LIMIT);
+
+  if (result != 8)
+  {
+    i2c_error();
+  }
+}
 
 void ConfigureI2C()
 {
@@ -409,10 +436,8 @@ void ConfigureI2C()
     i2c_error();
   }
 
-  const uint16_t config_value = _BV(15) | _BV(14) | _BV(4); //RESET, RSTACC & Enable ADCRANGE = 40.96mV scale
-
   //Now we know the INA228 is connected, reset to defaults
-  if (!i2c_writeword(INA_REGISTER::CONFIG, config_value))
+  if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG))
   {
     i2c_error();
   }
@@ -428,39 +453,13 @@ void ConfigureI2C()
     i2c_error();
   }
 
-  //Conversion times for voltage and current = 2074us
-  //temperature = 540us
-  //256 times sample averaging
-
-  // 1111 = Continuous bus, shunt voltage and temperature
-  // 110 = 6h = 2074 µs BUS VOLT
-  // 110 = 6h = 2074 µs CURRENT
-  // 100 = 4h = 540 µs TEMPERATURE
-  // 101 = 5h = 256 ADC sample averaging count
-  // B1111 110 110 100 101
-  //                   AVG
-  const uint16_t adc_config_value = 0xFDA5;
-
-  if (!i2c_writeword(INA_REGISTER::ADC_CONFIG, adc_config_value))
-  {
-    i2c_error();
-  }
-
-  // SHUNT_CAL = 13107.2x10^6  x CURRENT_LSB x RSHUNT
-  // SHUNT_CAL must be multiplied by 4 for ADCRANGE = 1
-  uint16_t shunt_cal_value = (uint16_t)((double)13107200000.0 * CURRENT_LSB * RSHUNT * (double)4.0);
-
-  //Top 2 bits are not used
-  shunt_cal_value = shunt_cal_value & 0x3FFF;
-
-  if (!i2c_writeword(INA_REGISTER::SHUNT_CAL, shunt_cal_value))
+  if (!i2c_writeword(INA_REGISTER::ADC_CONFIG, registers.R_ADC_CONFIG))
   {
     i2c_error();
   }
 
   //SLOWALERT ALATCH
-  diag_alrt_value = bit(DIAG_ALRT_FIELD::SLOWALERT); // | bit(DIAG_ALRT_FIELD::ALATCH);
-  if (!i2c_writeword(INA_REGISTER::DIAG_ALRT, diag_alrt_value))
+  if (!i2c_writeword(INA_REGISTER::DIAG_ALRT, registers.R_DIAG_ALRT))
   {
     i2c_error();
   }
@@ -476,6 +475,9 @@ void ConfigureI2C()
     i2c_error();
   }
 
+  SetINA228Registers();
+
+  /*
   //Sets the threshold for comparison of the value to detect Bus Overvoltage (overvoltage protection).
   //Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
   uint16_t BusOvervoltageThreshold = (uint16_t)(12.0F / 0.003125F) & 0x7FFFU;
@@ -504,6 +506,14 @@ void ConfigureI2C()
   const double y = (-0.500 / full_scale_current) * full_scale_adc;
   int16_t CurrentUnderThreshold = (y * 1000.0 / 1.25);
   i2c_writeword(INA_REGISTER::SUVL, CurrentUnderThreshold);
+  */
+}
+
+void CalculateLSB()
+{
+  full_scale_current = ((double)registers.shunt_max_current / (double)registers.shunt_millivolt) * full_scale_adc;
+  RSHUNT = ((double)registers.shunt_millivolt / 1000.0) / (double)registers.shunt_max_current;
+  CURRENT_LSB = full_scale_current / (double)0x80000;
 }
 
 void setup()
@@ -526,28 +536,49 @@ void setup()
   {
     //EEPROM is invalid, so apply "factory" defaults
 
-    /*
-  registers.R_CONFIG;
-  registers.R_ADC_CONFIG;
-  registers.R_SHUNT_CAL;   
-  registers.R_SHUNT_TEMPCO;
-  registers.R_DIAG_ALRT;
-*/
+    //RESET, RSTACC & Enable ADCRANGE = 40.96mV scale
+    registers.R_CONFIG = _BV(15) | _BV(14) | _BV(4);
+
+    //Conversion times for voltage and current = 2074us
+    //temperature = 540us
+    //256 times sample averaging
+    // 1111 = Continuous bus, shunt voltage and temperature
+    // 110 = 6h = 2074 µs BUS VOLT
+    // 110 = 6h = 2074 µs CURRENT
+    // 100 = 4h = 540 µs TEMPERATURE
+    // 101 = 5h = 256 ADC sample averaging count
+    // B1111 110 110 100 101
+    //                   AVG
+    registers.R_ADC_CONFIG = 0xFDA5;
+
+    registers.R_SHUNT_CAL = 0x1000; //Default 150A shunt @ 50mV scale
+
+    registers.shunt_max_current = 150;
+    registers.shunt_millivolt = 50;
+
+    //SLOWALERT = Wait for full sample averaging time before triggering alert (about 1.5 seconds)
+    registers.R_DIAG_ALRT = bit(DIAG_ALRT_FIELD::SLOWALERT);
+
+    registers.R_SHUNT_TEMPCO = i2c_readword(INA_REGISTER::SHUNT_TEMPCO);
+
     //Read the defaults from the INA228 chip as a starting point
     registers.R_SOVL = i2c_readword(INA_REGISTER::SOVL);
     registers.R_SUVL = i2c_readword(INA_REGISTER::SUVL);
-    registers.R_BOVL = i2c_readword(INA_REGISTER::BOVL);
-    registers.R_BUVL = i2c_readword(INA_REGISTER::BUVL);
-    registers.R_TEMP_LIMIT = i2c_readword(INA_REGISTER::TEMP_LIMIT);
+    //85volt max
+    registers.R_BOVL = 0x6A40; //i2c_readword(INA_REGISTER::BOVL);
+    registers.R_BUVL = i2c_readword(INA_REGISTER::BUVL);    
+    registers.R_TEMP_LIMIT = 0x2800;  //80 degrees C
     registers.R_PWR_LIMIT = i2c_readword(INA_REGISTER::PWR_LIMIT);
 
     //By default, trigger relay on all alerts
-    registers.relay_trigger_bitmap = bit(DIAG_ALRT_FIELD::TMPOL) |
-                                     bit(DIAG_ALRT_FIELD::SHNTOL) |
-                                     bit(DIAG_ALRT_FIELD::SHNTUL) |
-                                     bit(DIAG_ALRT_FIELD::BUSOL) |
-                                     bit(DIAG_ALRT_FIELD::BUSUL) |
-                                     bit(DIAG_ALRT_FIELD::POL);
+    registers.relay_trigger_bitmap = ALL_ALERT_BITS;
+
+    //Calc CURRENT_LSB * RSHUNT ready for SHUNT_CAL
+    CalculateLSB();
+    // SHUNT_CAL = 13107.2x10^6 x CURRENT_LSB x RSHUNT
+    // SHUNT_CAL must be multiplied by 4 for ADCRANGE = 1
+    //Top 2 bits are not used
+    registers.R_SHUNT_CAL = ((uint16_t)((double)13107200000.0 * CURRENT_LSB * RSHUNT * (double)4.0)) & 0x3FFF;
   }
 
   for (size_t i = 0; i < 6; i++)
@@ -566,6 +597,7 @@ void setup()
     delay(150);
   }
 
+  CalculateLSB();
   //ReadJumperPins();
 
   //Disable RS485 receiver (debug!)
@@ -626,9 +658,17 @@ double DieTemperature()
   //Internal die temperature measurement. Two's complement value. Conversion factor: 7.8125 m°C/LSB
 
   //Case unsigned to int16 to cope with negative temperatures
-  int16_t dietemp = i2c_readword(INA_REGISTER::DIETEMP);
+  double dietemp = (int16_t)i2c_readword(INA_REGISTER::DIETEMP);
 
-  return dietemp * (double)7.8125 / (double)1000.0;
+  return dietemp * (double)0.0078125;
+}
+
+double TemperatureLimit()
+{
+  //Case unsigned to int16 to cope with negative temperatures
+  double temp = (int16_t)i2c_readword(INA_REGISTER::TEMP_LIMIT);
+
+  return temp * (double)0.0078125;
 }
 
 double Current()
@@ -962,14 +1002,14 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
 
     case 18:
     {
-      sendbuff[ptr] = (uint8_t)(shunt_max_current >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(shunt_max_current & 0x00FF);
+      sendbuff[ptr] = (uint8_t)(registers.shunt_max_current >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(registers.shunt_max_current & 0x00FF);
       break;
     }
     case 19:
     {
-      sendbuff[ptr] = (uint8_t)(shunt_millivolt >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(shunt_millivolt & 0x00FF);
+      sendbuff[ptr] = (uint8_t)(registers.shunt_millivolt >> 8);
+      sendbuff[ptr + 1] = (uint8_t)(registers.shunt_millivolt & 0x00FF);
       break;
     }
 
@@ -985,7 +1025,7 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
     case 21:
     {
       //temperature limit
-      int16_t t = i2c_readword(INA_REGISTER::TEMP_LIMIT);
+      int16_t t = (int16_t)TemperatureLimit();
       sendbuff[ptr] = (uint8_t)(t >> 8);
       sendbuff[ptr + 1] = (uint8_t)(t & 0x00FF);
       break;
@@ -993,9 +1033,9 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
 
     case 22:
     {
-      //Sets the threshold for comparison of the value to detect Bus Overvoltage (overvoltage protection).
+      //Bus Overvoltage (overvoltage protection).
       //Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
-      BusOverVolt = (double)i2c_readword(INA_REGISTER::BOVL) * 0.003125F;
+      BusOverVolt = ((double)(uint16_t)i2c_readword(INA_REGISTER::BOVL)) * 0.003125F;
       extractHighWord(&BusOverVolt, ptr);
       break;
     }
@@ -1041,7 +1081,7 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
 
     case 28:
     {
-      //Shunt Over Voltage Limit (current limit)
+      //Shunt UNDER Voltage Limit (under current limit)
       int16_t value = i2c_readword(INA_REGISTER::SUVL);
 
       //const double x = (0.725 / full_scale_current) * full_scale_adc;
@@ -1060,7 +1100,7 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
 
     case 30:
     {
-      //Shunt Over Voltage Limit (current limit)
+      //Shunt Over POWER LIMIT
       uint16_t value = i2c_readword(INA_REGISTER::PWR_LIMIT);
       PowerLimit = value * 256;
       extractHighWord(&PowerLimit, ptr);
@@ -1160,12 +1200,7 @@ void loop()
     ALERT_TRIGGERED = false;
     diag_alrt_value = i2c_readword(INA_REGISTER::DIAG_ALRT);
 
-    alert = diag_alrt_value & (bit(DIAG_ALRT_FIELD::TMPOL) |
-                               bit(DIAG_ALRT_FIELD::SHNTOL) |
-                               bit(DIAG_ALRT_FIELD::SHNTUL) |
-                               bit(DIAG_ALRT_FIELD::BUSOL) |
-                               bit(DIAG_ALRT_FIELD::BUSUL) |
-                               bit(DIAG_ALRT_FIELD::POL));
+    alert = diag_alrt_value & ALL_ALERT_BITS;
 
     if (alert == 0)
     {
