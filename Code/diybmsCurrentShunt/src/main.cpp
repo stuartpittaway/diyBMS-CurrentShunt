@@ -88,8 +88,25 @@ uint8_t sendbuff[128];
 
 bool relay_state = false;
 
+//This structure is held in EEPROM, it has the same register/values
+//as the INA228 chip and is used to set the INA228 chip to the correct parameters on power up
+
+// On initial power up (or EEPROM clear) these parameters are read from the INA228 chip
+// to provide defaults.  Some values are overridden in code (like ADC_CONFIG and CONFIG)
+// to configure to our prescribed needs.
 struct eeprom_regs
 {
+  uint16_t R_CONFIG;
+  uint16_t R_ADC_CONFIG;
+  uint16_t R_SHUNT_CAL;    //Shunt Calibration
+  uint16_t R_SHUNT_TEMPCO; //Shunt Temperature Coefficient
+  uint16_t R_DIAG_ALRT;
+  uint16_t R_SOVL;
+  uint16_t R_SUVL;
+  uint16_t R_BOVL;
+  uint16_t R_BUVL;
+  uint16_t R_TEMP_LIMIT;
+  uint16_t R_PWR_LIMIT;
 
   //Holds what alert events trigger the relay to turn on/high
   //uses the same values/mapping as enum DIAG_ALRT_FIELD
@@ -502,18 +519,38 @@ void setup()
     wdt_triggered_count = 0;
   }
 
-  //By default, trigger relay on all alerts
-  registers.relay_trigger_bitmap = bit(DIAG_ALRT_FIELD::TMPOL) |
-                         bit(DIAG_ALRT_FIELD::SHNTOL) |
-                         bit(DIAG_ALRT_FIELD::SHNTUL) |
-                         bit(DIAG_ALRT_FIELD::BUSOL) |
-                         bit(DIAG_ALRT_FIELD::BUSUL) |
-                         bit(DIAG_ALRT_FIELD::POL);
-
   ConfigurePorts();
   EnableWatchdog();
 
-  for (size_t i = 0; i < 5; i++)
+  if (!ReadConfigFromEEPROM((uint8_t *)&registers, sizeof(eeprom_regs)))
+  {
+    //EEPROM is invalid, so apply "factory" defaults
+
+    /*
+  registers.R_CONFIG;
+  registers.R_ADC_CONFIG;
+  registers.R_SHUNT_CAL;   
+  registers.R_SHUNT_TEMPCO;
+  registers.R_DIAG_ALRT;
+*/
+    //Read the defaults from the INA228 chip as a starting point
+    registers.R_SOVL = i2c_readword(INA_REGISTER::SOVL);
+    registers.R_SUVL = i2c_readword(INA_REGISTER::SUVL);
+    registers.R_BOVL = i2c_readword(INA_REGISTER::BOVL);
+    registers.R_BUVL = i2c_readword(INA_REGISTER::BUVL);
+    registers.R_TEMP_LIMIT = i2c_readword(INA_REGISTER::TEMP_LIMIT);
+    registers.R_PWR_LIMIT = i2c_readword(INA_REGISTER::PWR_LIMIT);
+
+    //By default, trigger relay on all alerts
+    registers.relay_trigger_bitmap = bit(DIAG_ALRT_FIELD::TMPOL) |
+                                     bit(DIAG_ALRT_FIELD::SHNTOL) |
+                                     bit(DIAG_ALRT_FIELD::SHNTUL) |
+                                     bit(DIAG_ALRT_FIELD::BUSOL) |
+                                     bit(DIAG_ALRT_FIELD::BUSUL) |
+                                     bit(DIAG_ALRT_FIELD::POL);
+  }
+
+  for (size_t i = 0; i < 6; i++)
   {
     GreenLED(true);
     if (wdt_triggered)
@@ -529,7 +566,6 @@ void setup()
     delay(150);
   }
 
-  //ReadConfigFromEEPROM
   //ReadJumperPins();
 
   //Disable RS485 receiver (debug!)
@@ -1207,7 +1243,7 @@ void loop()
 
     RedLED(true);
 
-    //Check again in 2 seconds
+    //Do it again in 5 seconds
     timer = millis() + 5000;
 
     //double voltage = BusVoltage();
@@ -1219,7 +1255,8 @@ void loop()
     //double energy_joules = Energy();
     double charge_coulombs = Charge();
 
-    //8202
+    //If we don't have a power reading, ignore the coulombs - also means
+    //Ah counting won't work without voltage reading on the INA228 chip
     if (power > 0)
     {
       if (charge_coulombs > 0)
