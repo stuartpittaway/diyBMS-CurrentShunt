@@ -46,4 +46,3 @@ enum DIAG_ALRT_FIELD : uint16_t
 
 void RedLED(bool value);
 void GreenLED(bool value);
-void printBit16(uint16_t b);
