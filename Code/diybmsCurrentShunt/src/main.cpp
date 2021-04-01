@@ -91,12 +91,15 @@ bool relay_state = false;
 //This structure is held in EEPROM, it has the same register/values
 //as the INA228 chip and is used to set the INA228 chip to the correct parameters on power up
 
+//RESET, RSTACC & Enable ADCRANGE = 40.96mV scale
+const uint16_t R_CONFIG = _BV(15) | _BV(14) | _BV(4);
+
 // On initial power up (or EEPROM clear) these parameters are read from the INA228 chip
 // to provide defaults.  Some values are overridden in code (like ADC_CONFIG and CONFIG)
 // to configure to our prescribed needs.
 struct eeprom_regs
 {
-  uint16_t R_CONFIG;
+  //  uint16_t R_CONFIG;
   uint16_t R_ADC_CONFIG;
   uint16_t R_SHUNT_CAL;    //Shunt Calibration
   uint16_t R_SHUNT_TEMPCO; //Shunt Temperature Coefficient
@@ -110,10 +113,10 @@ struct eeprom_regs
 
   //Holds what alert events trigger the relay to turn on/high
   //uses the same values/mapping as enum DIAG_ALRT_FIELD
-  uint16_t relay_trigger_bitmap = 0;
+  uint16_t relay_trigger_bitmap;
 
-  uint16_t shunt_max_current = 150;
-  uint16_t shunt_millivolt = 50;
+  uint16_t shunt_max_current;
+  uint16_t shunt_millivolt;
 };
 
 eeprom_regs registers;
@@ -262,8 +265,8 @@ bool i2c_writeword(const uint8_t inareg, const uint16_t data)
   Wire.flush();
   Wire.beginTransmission(INA228_I2C_Address);
   Wire.write(inareg);
-  Wire.write((uint8_t)(data >> 8)); // Write the first (MSB) byte
-  Wire.write((uint8_t)data & 0x00FF);        // and then the second byte
+  Wire.write((uint8_t)(data >> 8));   // Write the first (MSB) byte
+  Wire.write((uint8_t)data & 0x00FF); // and then the second byte
   uint8_t result = Wire.endTransmission();
 
   //Delay after making a write to INA chip
@@ -405,7 +408,7 @@ void ResetChargeEnergyRegisters()
   //0h = Normal Operation
   //1h = Clears registers to default values for ENERGY and CHARGE registers
 
-  if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG | 0x1000))
+  if (!i2c_writeword(INA_REGISTER::CONFIG, R_CONFIG | 0x1000))
   {
     i2c_error();
   }
@@ -448,7 +451,7 @@ void ConfigureI2C()
   }
 
   //Now we know the INA228 is connected, reset to defaults
-  if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG))
+  if (!i2c_writeword(INA_REGISTER::CONFIG, R_CONFIG))
   {
     i2c_error();
   }
@@ -469,6 +472,12 @@ void ConfigureI2C()
     i2c_error();
   }
 
+  //shunt cal
+  if (!i2c_writeword(INA_REGISTER::SHUNT_CAL, registers.R_SHUNT_CAL))
+  {
+    i2c_error();
+  }
+
   //SLOWALERT ALATCH
   if (!i2c_writeword(INA_REGISTER::DIAG_ALRT, registers.R_DIAG_ALRT))
   {
@@ -485,6 +494,8 @@ void ConfigureI2C()
     //1h = Normal Operation
     i2c_error();
   }
+
+  SetINA228Registers();
 
   /*
   //Sets the threshold for comparison of the value to detect Bus Overvoltage (overvoltage protection).
@@ -543,6 +554,7 @@ void setup()
   GreenLED(false);
   EnableWatchdog();
 
+  /*
   if (ReadConfigFromEEPROM((uint8_t *)&registers, sizeof(eeprom_regs)) == false)
   {
     //Flash RED led 5 times to indicate facory reset
@@ -553,56 +565,52 @@ void setup()
       RedLED(false);
       delay(200);
     }
+*/
 
-    //EEPROM is invalid, so apply "factory" defaults
+  //EEPROM is invalid, so apply "factory" defaults
 
-    //Clear structure
-    memset(&registers, 0, sizeof(eeprom_regs));
+  //Clear structure
+  memset(&registers, 0, sizeof(eeprom_regs));
 
-    //RESET, RSTACC & Enable ADCRANGE = 40.96mV scale
-    registers.R_CONFIG = 0xC010; //_BV(15) | _BV(14) | _BV(4);
+  //Conversion times for voltage and current = 2074us
+  //temperature = 540us
+  //256 times sample averaging
+  // 1111 = Continuous bus, shunt voltage and temperature
+  // 110 = 6h = 2074 µs BUS VOLT
+  // 110 = 6h = 2074 µs CURRENT
+  // 100 = 4h = 540 µs TEMPERATURE
+  // 101 = 5h = 256 ADC sample averaging count
+  // B1111 110 110 100 101
+  //                   AVG
+  registers.R_ADC_CONFIG = 0xFDA5;
 
-    //Conversion times for voltage and current = 2074us
-    //temperature = 540us
-    //256 times sample averaging
-    // 1111 = Continuous bus, shunt voltage and temperature
-    // 110 = 6h = 2074 µs BUS VOLT
-    // 110 = 6h = 2074 µs CURRENT
-    // 100 = 4h = 540 µs TEMPERATURE
-    // 101 = 5h = 256 ADC sample averaging count
-    // B1111 110 110 100 101
-    //                   AVG
-    registers.R_ADC_CONFIG = 0xFDA5;
+  //Default 150A shunt @ 50mV scale
+  registers.R_SHUNT_CAL = 0x1000;
+  registers.shunt_max_current = 150;
+  registers.shunt_millivolt = 50;
 
-    //Default 150A shunt @ 50mV scale
-    registers.R_SHUNT_CAL = 0x1000;
-    registers.shunt_max_current = 150;
-    registers.shunt_millivolt = 50;
+  //SLOWALERT = Wait for full sample averaging time before triggering alert (about 1.5 seconds)
+  registers.R_DIAG_ALRT = bit(DIAG_ALRT_FIELD::SLOWALERT);
 
-    //SLOWALERT = Wait for full sample averaging time before triggering alert (about 1.5 seconds)
-    registers.R_DIAG_ALRT = bit(DIAG_ALRT_FIELD::SLOWALERT);
+  //This is not enabled by CONFIG
+  registers.R_SHUNT_TEMPCO = 0x1000;
 
-    //This is not enabled by CONFIG
-    registers.R_SHUNT_TEMPCO = 0x1000;
+  //Read the defaults from the INA228 chip as a starting point
+  registers.R_SOVL = 0x7FFF;
+  registers.R_SUVL = 0x8000;
+  //85volt max
+  registers.R_BOVL = 0x6A40; //i2c_readword(INA_REGISTER::BOVL);
+  registers.R_BUVL = 0;
+  registers.R_TEMP_LIMIT = 0x2800;    //80 degrees C
+  registers.R_PWR_LIMIT = 10000 >> 8; //10kW
 
-    //Read the defaults from the INA228 chip as a starting point
-    registers.R_SOVL = 0x7FFF;
-    registers.R_SUVL = 0x8000;
-    //85volt max
-    registers.R_BOVL = 0x6A40; //i2c_readword(INA_REGISTER::BOVL);
-    registers.R_BUVL = 0;
-    registers.R_TEMP_LIMIT = 0x2800;    //80 degrees C
-    registers.R_PWR_LIMIT = 10000 >> 8; //10kW
-
-    //By default, trigger relay on all alerts
-    registers.relay_trigger_bitmap = ALL_ALERT_BITS;
-  }
+  //By default, trigger relay on all alerts
+  registers.relay_trigger_bitmap = ALL_ALERT_BITS;
+  //  }
 
   CalculateLSB();
 
   ConfigureI2C();
-
-  SetINA228Registers();
 
   for (size_t i = 0; i < 6; i++)
   {
@@ -1180,7 +1188,7 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
 
     case 59:
     {
-      uint16_t x = i2c_readword(INA_REGISTER::CONFIG);      
+      uint16_t x = i2c_readword(INA_REGISTER::CONFIG);
       sendbuff[ptr] = (uint8_t)(x >> 8);
       sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
       break;
