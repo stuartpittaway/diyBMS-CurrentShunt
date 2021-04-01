@@ -1,5 +1,6 @@
 #include <Arduino.h>
 
+
 enum INA_REGISTER : uint8_t
 {
   CONFIG = 0,
@@ -43,6 +44,14 @@ enum DIAG_ALRT_FIELD : uint16_t
   CNVRF = 1,
   MEMSTAT = 0
 };
+
+
+const uint16_t ALL_ALERT_BITS = (bit(DIAG_ALRT_FIELD::TMPOL) |
+                                 bit(DIAG_ALRT_FIELD::SHNTOL) |
+                                 bit(DIAG_ALRT_FIELD::SHNTUL) |
+                                 bit(DIAG_ALRT_FIELD::BUSOL) |
+                                 bit(DIAG_ALRT_FIELD::BUSUL) |
+                                 bit(DIAG_ALRT_FIELD::POL));
 
 void RedLED(bool value);
 void GreenLED(bool value);

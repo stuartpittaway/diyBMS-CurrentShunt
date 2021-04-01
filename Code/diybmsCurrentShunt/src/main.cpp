@@ -68,14 +68,7 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 
 const double full_scale_adc = 40.96;
 const double CoulombsToAmpHours = 0.00027778;
-const uint8_t INA228_I2C_Address{B1000000};
-
-const uint16_t ALL_ALERT_BITS = (bit(DIAG_ALRT_FIELD::TMPOL) |
-                                 bit(DIAG_ALRT_FIELD::SHNTOL) |
-                                 bit(DIAG_ALRT_FIELD::SHNTUL) |
-                                 bit(DIAG_ALRT_FIELD::BUSOL) |
-                                 bit(DIAG_ALRT_FIELD::BUSUL) |
-                                 bit(DIAG_ALRT_FIELD::POL));
+const uint8_t INA228_I2C_Address = B1000000;
 
 uint16_t ModBusBaudRate = MODBUSDEFAULTBAUDRATE;
 
@@ -84,22 +77,25 @@ uint8_t ModbusSlaveAddress = MODBUSBASEADDRESS;
 //Buffer to hold 8 byte modbus RTU request
 uint8_t modbus[8];
 
-uint8_t sendbuff[128];
+//Enough for 4 control bytes + 2 bytes per register = 60 registers
+uint8_t sendbuff[5 + (60 * 2)];
 
 bool relay_state = false;
 
-//This structure is held in EEPROM, it has the same register/values
-//as the INA228 chip and is used to set the INA228 chip to the correct parameters on power up
+unsigned long timer = 0;
 
-//RESET, RSTACC & Enable ADCRANGE = 40.96mV scale
-const uint16_t R_CONFIG = _BV(15) | _BV(14) | _BV(4);
+#define combineBytes(high, low) (high << 8) + low
+
+const uint16_t R_CONFIG = _BV(4); // ADCRANGE = 40.96mV scale
+
+// This structure is held in EEPROM, it has the same register/values
+// as the INA228 chip and is used to set the INA228 chip to the correct parameters on power up
 
 // On initial power up (or EEPROM clear) these parameters are read from the INA228 chip
 // to provide defaults.  Some values are overridden in code (like ADC_CONFIG and CONFIG)
 // to configure to our prescribed needs.
 struct eeprom_regs
 {
-  //  uint16_t R_CONFIG;
   uint16_t R_ADC_CONFIG;
   uint16_t R_SHUNT_CAL;    //Shunt Calibration
   uint16_t R_SHUNT_TEMPCO; //Shunt Temperature Coefficient
@@ -124,7 +120,6 @@ eeprom_regs registers;
 double full_scale_current;
 double CURRENT_LSB;
 double RSHUNT;
-
 double amphour_in = 0;
 double amphour_out = 0;
 
@@ -262,15 +257,15 @@ void WatchdogTriggered()
 
 bool i2c_writeword(const uint8_t inareg, const uint16_t data)
 {
-  Wire.flush();
   Wire.beginTransmission(INA228_I2C_Address);
   Wire.write(inareg);
-  Wire.write((uint8_t)(data >> 8));   // Write the first (MSB) byte
-  Wire.write((uint8_t)data & 0x00FF); // and then the second byte
+  Wire.write((uint8_t)(data >> 8)); // Write the first (MSB) byte
+  Wire.write((uint8_t)data);        // and then the second byte
   uint8_t result = Wire.endTransmission();
 
   //Delay after making a write to INA chip
   delayMicroseconds(10);
+
   return result == 0;
 }
 
@@ -418,17 +413,32 @@ volatile uint16_t diag_alrt_value = 0;
 
 void SetINA228Registers()
 {
-  uint8_t result = 0;
-  result += i2c_writeword(INA_REGISTER::SHUNT_CAL, registers.R_SHUNT_CAL);
-  result += i2c_writeword(INA_REGISTER::SHUNT_TEMPCO, registers.R_SHUNT_TEMPCO);
-  result += i2c_writeword(INA_REGISTER::SOVL, registers.R_SOVL);
-  result += i2c_writeword(INA_REGISTER::SUVL, registers.R_SUVL);
-  result += i2c_writeword(INA_REGISTER::BOVL, registers.R_BOVL);
-  result += i2c_writeword(INA_REGISTER::BUVL, registers.R_BUVL);
-  result += i2c_writeword(INA_REGISTER::TEMP_LIMIT, registers.R_TEMP_LIMIT);
-  result += i2c_writeword(INA_REGISTER::PWR_LIMIT, registers.R_PWR_LIMIT);
-
-  if (result != 8)
+  if (!i2c_writeword(INA_REGISTER::SHUNT_CAL, registers.R_SHUNT_CAL))
+  {
+    i2c_error();
+  }
+  //result += i2c_writeword(INA_REGISTER::SHUNT_TEMPCO, registers.R_SHUNT_TEMPCO))  {    i2c_error();  }
+  if (!i2c_writeword(INA_REGISTER::SOVL, registers.R_SOVL))
+  {
+    i2c_error();
+  }
+  if (!i2c_writeword(INA_REGISTER::SUVL, registers.R_SUVL))
+  {
+    i2c_error();
+  }
+  if (!i2c_writeword(INA_REGISTER::BOVL, registers.R_BOVL))
+  {
+    i2c_error();
+  }
+  if (!i2c_writeword(INA_REGISTER::BUVL, registers.R_BUVL))
+  {
+    i2c_error();
+  }
+  if (!i2c_writeword(INA_REGISTER::TEMP_LIMIT, registers.R_TEMP_LIMIT))
+  {
+    i2c_error();
+  }
+  if (!i2c_writeword(INA_REGISTER::PWR_LIMIT, registers.R_PWR_LIMIT))
   {
     i2c_error();
   }
@@ -450,7 +460,16 @@ void ConfigureI2C()
     i2c_error();
   }
 
-  //Now we know the INA228 is connected, reset to defaults
+  //Now we know the INA228 is connected, reset to power on defaults
+  if (!i2c_writeword(INA_REGISTER::CONFIG, (uint16_t)_BV(15)))
+  {
+    i2c_error();
+  }
+
+  //Allow the reset to work
+  delay(100);
+
+  // and configure our registers (after reset)
   if (!i2c_writeword(INA_REGISTER::CONFIG, R_CONFIG))
   {
     i2c_error();
@@ -601,16 +620,16 @@ void setup()
   //85volt max
   registers.R_BOVL = 0x6A40; //i2c_readword(INA_REGISTER::BOVL);
   registers.R_BUVL = 0;
-  registers.R_TEMP_LIMIT = 0x2800;    //80 degrees C
-  registers.R_PWR_LIMIT = 10000 >> 8; //10kW
+  registers.R_TEMP_LIMIT = 0x2800; //80 degrees C
+
+  CalculateLSB();
+
+  //Default Power limit = 5kW
+  registers.R_PWR_LIMIT = (uint16_t)((5000.0 / CURRENT_LSB / 3.2) / 256.0); //5kW
 
   //By default, trigger relay on all alerts
   registers.relay_trigger_bitmap = ALL_ALERT_BITS;
   //  }
-
-  CalculateLSB();
-
-  ConfigureI2C();
 
   for (size_t i = 0; i < 6; i++)
   {
@@ -633,6 +652,8 @@ void setup()
   //Disable RS485 receiver (debug!)
   PORTB.OUTSET = PIN0_bm;
   PORTB.PIN0CTRL = 0;
+
+  ConfigureI2C();
 
   //Serial uses PB2/PB3 and PB0 for XDIR
   Serial.begin(ModBusBaudRate, MODBUSSERIALCONFIG);
@@ -755,10 +776,14 @@ uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity)
 {
   uint8_t ptr = 3;
 
-  //Safety check, only return max 32 registers
-  if (quantity > 32)
+  //Safety check
+  if (quantity > 16)
   {
-    quantity = 32;
+    //Set highest bit to indicate error
+    sendbuff[1] = sendbuff[1] | B10000000;
+    //Illegal Data Address
+    sendbuff[2] = 0x02;
+    return 3;
   }
 
   uint16_t config = i2c_readword(INA_REGISTER::CONFIG);
@@ -798,10 +823,10 @@ uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity)
     }
     case 5:
     {
+      //Power over limit
       outcome = diag_alrt_value & bit(DIAG_ALRT_FIELD::POL);
       break;
     }
-
     case 6:
     {
       //Temperature compensation
@@ -892,12 +917,16 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
   double BusUnderVolt = 0;
   double ShuntOverCurrentLimit = 0;
   double ShuntUnderCurrentLimit = 0;
-  uint32_t PowerLimit = 0;
+  double PowerLimit = 0;
 
-  //Safety check, only return max 32 registers
+  //Safety check
   if (quantity > 48)
   {
-    quantity = 48;
+    //Set highest bit to indicate error
+    sendbuff[1] = sendbuff[1] | B10000000;
+    //Illegal Data Address
+    sendbuff[2] = 0x02;
+    return 3;
   }
 
   for (size_t i = address; i < address + quantity; i++)
@@ -1131,16 +1160,13 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
     {
       //Shunt Over POWER LIMIT
       PowerLimit = (uint16_t)i2c_readword(INA_REGISTER::PWR_LIMIT);
-      PowerLimit = PowerLimit << 8;
-      //extractHighWord(&PowerLimit, ptr);
-      sendbuff[ptr] = ((uint8_t *)PowerLimit)[1];
-      sendbuff[ptr + 1] = ((uint8_t *)PowerLimit)[0];
+      PowerLimit = PowerLimit * 256 * 3.2 * CURRENT_LSB;
+      extractHighWord(&PowerLimit, ptr);
       break;
     }
     case 31:
     {
-      sendbuff[ptr] = ((uint8_t *)PowerLimit)[3];
-      sendbuff[ptr + 1] = ((uint8_t *)PowerLimit)[2];
+      extractLowWord(&PowerLimit, ptr);
       break;
     }
 
@@ -1283,10 +1309,6 @@ uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
   return ptr;
 }
 
-unsigned long timer = 0;
-
-#define combineBytes(high, low) (high << 8) + low
-
 void loop()
 {
   wdt_reset();
@@ -1340,7 +1362,6 @@ void loop()
 
   while (Serial.available())
   {
-    GreenLED(true);
 
     // we have a rolling 8 byte window
     for (uint8_t k = 1; k < 8; k++)
@@ -1350,45 +1371,60 @@ void loop()
 
     modbus[7] = (uint8_t)Serial.read(); // receive a byte
 
-    //3 = Read Holding Registers
-    if (
-        (modbus[0] == ModbusSlaveAddress) &&
-        ((modbus[1] == 2) || (modbus[1] == 3)))
+    uint8_t cmd = modbus[1];
+
+    // 8 byte commands 2/3/6
+    if ((modbus[0] == ModbusSlaveAddress) && ((cmd == 2) || (cmd == 3) || (cmd == 6)))
     {
-      //Do something
-
       uint16_t crc16 = combineBytes(modbus[7], modbus[6]);
-
       uint16_t calculatedCRC = ModbusRTU_CRC(modbus, 6);
       if (crc16 == calculatedCRC)
       {
+        //Do something
+        GreenLED(true);
         //EnableSerial0TX();
 
         //Prepare reply buffer
         memset(sendbuff, 0, sizeof(sendbuff));
         sendbuff[0] = ModbusSlaveAddress; // slv addr
-        sendbuff[1] = modbus[1];
+        sendbuff[1] = cmd;
         uint8_t ptr = 0;
 
         //1 = command
         //2+3 = data address
         //4+5 = data amount/quantity
-        if (modbus[1] == 2)
+        if (cmd == 2)
         {
           ptr = ReadDiscreteInputs(combineBytes(modbus[2], modbus[3]), combineBytes(modbus[4], modbus[5]));
         }
 
-        if (modbus[1] == 3)
+        if (cmd == 3)
         {
           ptr = ReadHoldingRegisters(combineBytes(modbus[2], modbus[3]), combineBytes(modbus[4], modbus[5]));
         }
 
-        sendbuff[2] = ptr - 3;
+        if (cmd == 0x06)
+        {
+          //Set highest bit to indicate error
+          sendbuff[1] = cmd | B10000000;
+          //Illegal Function
+          sendbuff[2] = 0x01;
+          ptr = 3;
+        }
+
+        if ((sendbuff[1] & B10000000) == 0)
+        {
+          //No error, so populate the length (error packets don't have this byte)
+          sendbuff[2] = ptr - 3;
+        }
+
         SendModbusData(&sendbuff[0], ptr);
-      }
-      GreenLED(false);
-    }
-  }
+        GreenLED(false);
+      } //end of crc check
+
+    } //end of if
+
+  } //end while
 
   if (millis() > timer)
   {
