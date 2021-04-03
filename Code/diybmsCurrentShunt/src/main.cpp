@@ -57,6 +57,8 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 
 #include "EmbeddedFiles_Defines.h"
 
+#include "SimpleModbusSlave.h"
+
 #define GREENLED_PIN_BITMAP PIN7_bm
 #define REDLED_PIN_BITMAP PIN6_bm
 #define RELAY_PIN_BITMAP PIN5_bm
@@ -66,6 +68,12 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 //Scale the full current based on 40.96mV (max range for 20bit ADC)
 //const double full_scale_current = shunt_max_current;
 
+typedef union
+{
+  double dblvalue;
+  uint16_t word[2];
+} DoubleUnionType;
+
 const double full_scale_adc = 40.96;
 const double CoulombsToAmpHours = 0.00027778;
 const uint8_t INA228_I2C_Address = B1000000;
@@ -73,12 +81,6 @@ const uint8_t INA228_I2C_Address = B1000000;
 uint16_t ModBusBaudRate = MODBUSDEFAULTBAUDRATE;
 
 uint8_t ModbusSlaveAddress = MODBUSBASEADDRESS;
-
-//Buffer to hold 8 byte modbus RTU request
-uint8_t modbus[8];
-
-//Enough for 4 control bytes + 2 bytes per register = 60 registers
-uint8_t sendbuff[5 + (60 * 2)];
 
 bool relay_state = false;
 
@@ -662,6 +664,8 @@ void setup()
   //USART0.CTRLA |= B00000001;
 
   wdt_triggered = false;
+
+  modbus_configure(&Serial, ModBusBaudRate);
 }
 
 double BusVoltage()
@@ -741,19 +745,7 @@ ISR(PORTB_PORT_vect)
     ALERT_TRIGGERED = true;
   }
 }
-
-void SendModbusData(uint8_t *sendbuff, const uint8_t len)
-{
-  // calc checksum
-  uint16_t csum = ModbusRTU_CRC(sendbuff, len);
-
-  // insert checksum
-  sendbuff[len] = csum & 0xFF;
-  sendbuff[len + 1] = csum >> 8;
-
-  // send over rs485 wire
-  Serial.write(sendbuff, 2 + len);
-}
+/*
 
 void extractHighWord(double *value, const uint8_t index)
 {
@@ -770,7 +762,9 @@ void extractLowWord(double *value, const uint8_t index)
   sendbuff[index] = i[2 + 1];
   sendbuff[index + 1] = i[2 + 0];
 }
+*/
 
+/*
 //Modbus command 2 Read Discrete Inputs
 uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity)
 {
@@ -901,412 +895,368 @@ uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity)
 
   return ptr;
 }
+*/
 
-uint8_t ReadHoldingRegisters(uint16_t address, uint16_t quantity)
+uint16_t ReadHoldingRegister(uint16_t address)
 {
-  //Populate data from byte 3...
-  uint8_t ptr = 3;
-
   //Temporary variables to hold the register data
-  double v = 0;
-  double c = 0;
-  double p = 0;
-  double shuntv = 0;
+  static DoubleUnionType v;
+  static DoubleUnionType c;
+  static DoubleUnionType p;
+  static DoubleUnionType shuntv;
 
-  double BusOverVolt = 0;
-  double BusUnderVolt = 0;
-  double ShuntOverCurrentLimit = 0;
-  double ShuntUnderCurrentLimit = 0;
-  double PowerLimit = 0;
+  static DoubleUnionType BusOverVolt;
+  static DoubleUnionType BusUnderVolt;
+  static DoubleUnionType ShuntOverCurrentLimit;
+  static DoubleUnionType ShuntUnderCurrentLimit;
+  static DoubleUnionType PowerLimit;
 
-  //Safety check
-  if (quantity > 48)
+  static DoubleUnionType copy_amphour_out;
+  static DoubleUnionType copy_amphour_in;
+
+  static DoubleUnionType copy_current_lsb;
+  static DoubleUnionType copy_shunt_resistance;
+
+  switch (address)
   {
-    //Set highest bit to indicate error
-    sendbuff[1] = sendbuff[1] | B10000000;
-    //Illegal Data Address
-    sendbuff[2] = 0x02;
-    return 3;
+  case 0:
+  {
+    //Voltage
+    v.dblvalue = BusVoltage();
+    return v.word[0];
+    break;
   }
 
-  for (size_t i = address; i < address + quantity; i++)
+  case 1:
   {
-    switch (i)
-    {
-    case 0:
-    {
-      //Voltage
-      v = BusVoltage();
-      extractHighWord(&v, ptr);
-      break;
-    }
+    //Voltage
+    return v.word[1];
+    break;
+  }
 
-    case 1:
-    {
-      //Voltage
-      extractLowWord(&v, ptr);
-      break;
-    }
+  case 2:
+  {
+    //Current
+    c.dblvalue = Current();
+    return c.word[0];
+    break;
+  }
 
-    case 2:
-    {
-      //Current
-      c = Current();
-      extractHighWord(&c, ptr);
-      break;
-    }
+  case 3:
+  {
+    //Current
+    return c.word[1];
+    break;
+  }
 
-    case 3:
-    {
-      //Current
-      extractLowWord(&c, ptr);
-      break;
-    }
+  case 4:
+  {
+    //amphour_out
+    copy_amphour_out.dblvalue = amphour_out;
+    return copy_amphour_out.word[0];
+    break;
+  }
 
-    case 4:
-    {
-      //amphour_out
-      extractHighWord(&amphour_out, ptr);
-      break;
-    }
+  case 5:
+  {
+    //amphour_out
+    return copy_amphour_out.word[1];
+    break;
+  }
 
-    case 5:
-    {
-      //amphour_out
-      extractLowWord(&amphour_out, ptr);
-      break;
-    }
+  case 6:
+  {
+    //amphour_in
+    copy_amphour_in.dblvalue = amphour_in;
+    return copy_amphour_in.word[0];
+    break;
+  }
 
-    case 6:
-    {
-      //amphour_in
-      extractHighWord(&amphour_in, ptr);
-      break;
-    }
+  case 7:
+  {
+    //amphour_in
+    return copy_amphour_in.word[1];
+    break;
+  }
 
-    case 7:
-    {
-      //amphour_in
-      extractLowWord(&amphour_in, ptr);
-      break;
-    }
+  case 8:
+  {
+    //temperature
+    return (int16_t)DieTemperature();
+    break;
+  }
 
-    case 8:
-    {
-      //temperature
-      int16_t t = (int16_t)DieTemperature();
-      sendbuff[ptr] = (uint8_t)(t >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(t & 0x00FF);
-      break;
-    }
+  case 9:
+  {
+    //Watchdog timer trigger count (like error counter)
+    return wdt_triggered_count;
+    break;
+  }
 
-    case 9:
-    {
-      //Watchdog timer trigger count (like error counter)
-      sendbuff[ptr] = (uint8_t)(wdt_triggered_count >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(wdt_triggered_count & 0x00FF);
-      break;
-    }
+  case 10:
+  {
+    //Power
+    p.dblvalue = Power();
+    return p.word[0];
+    break;
+  }
 
-    case 10:
-    {
-      //Power
-      p = Power();
-      extractHighWord(&p, ptr);
-      break;
-    }
+  case 11:
+  {
+    //Power
+    return p.word[1];
+    break;
+  }
 
-    case 11:
-    {
-      //Power
-      extractLowWord(&p, ptr);
-      break;
-    }
+  case 12:
+  {
+    //Shunt mV
+    shuntv.dblvalue = ShuntVoltage();
+    return shuntv.word[0];
+    break;
+  }
 
-    case 12:
-    {
-      //Shunt mV
-      shuntv = ShuntVoltage();
-      extractHighWord(&shuntv, ptr);
-      break;
-    }
+  case 13:
+  {
+    //Shunt mV
+    return shuntv.word[1];
+    break;
+  }
 
-    case 13:
-    {
-      //Shunt mV
-      extractLowWord(&shuntv, ptr);
-      break;
-    }
+    
+  case 14:
+  {    
+    copy_current_lsb.dblvalue=CURRENT_LSB;
+    return copy_current_lsb.word[0];
+    break;
+  }
 
-    case 14:
-    {
-      extractHighWord(&CURRENT_LSB, ptr);
-      break;
-    }
+  case 15:
+  {
+    return copy_current_lsb.word[1];
+    break;
+  }
+  case 16:
+  {
+    copy_shunt_resistance.dblvalue=RSHUNT;
+    return copy_shunt_resistance.word[0];
+    break;
+  }
 
-    case 15:
-    {
-      extractLowWord(&CURRENT_LSB, ptr);
-      break;
-    }
-    case 16:
-    {
-      extractHighWord(&RSHUNT, ptr);
-      break;
-    }
+  case 17:
+  {
+    return copy_shunt_resistance.word[1];
+    break;
+  }
 
-    case 17:
-    {
-      extractLowWord(&RSHUNT, ptr);
-      break;
-    }
+  case 18:
+  {
+    return registers.shunt_max_current;
+    break;
+  }
+  case 19:
+  {
+    return registers.shunt_millivolt;
+    break;
+  }
 
-    case 18:
-    {
-      sendbuff[ptr] = (uint8_t)(registers.shunt_max_current >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(registers.shunt_max_current & 0x00FF);
-      break;
-    }
-    case 19:
-    {
-      sendbuff[ptr] = (uint8_t)(registers.shunt_millivolt >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(registers.shunt_millivolt & 0x00FF);
-      break;
-    }
+  case 20:
+  {
+    //SHUNT_CAL register
+    return i2c_readword(INA_REGISTER::SHUNT_CAL);
+    //sendbuff[ptr] = (uint8_t)(shunt_cal_value >> 8);
+    //sendbuff[ptr + 1] = (uint8_t)(shunt_cal_value & 0x00FF);
+    break;
+  }
 
-    case 20:
-    {
-      //SHUNT_CAL register
-      uint16_t shunt_cal_value = i2c_readword(INA_REGISTER::SHUNT_CAL);
-      sendbuff[ptr] = (uint8_t)(shunt_cal_value >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(shunt_cal_value & 0x00FF);
-      break;
-    }
+  case 21:
+  {
+    //temperature limit
+    return (int16_t)TemperatureLimit();
+    break;
+  }
 
-    case 21:
-    {
-      //temperature limit
-      int16_t t = (int16_t)TemperatureLimit();
-      sendbuff[ptr] = (uint8_t)(t >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(t & 0x00FF);
-      break;
-    }
+  case 22:
+  {
+    //Bus Overvoltage (overvoltage protection).
+    //Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
+    BusOverVolt.dblvalue = ((double)(uint16_t)i2c_readword(INA_REGISTER::BOVL)) * 0.003125F;
+    return BusOverVolt.word[0];
+    break;
+  }
 
-    case 22:
-    {
-      //Bus Overvoltage (overvoltage protection).
-      //Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
-      BusOverVolt = ((double)(uint16_t)i2c_readword(INA_REGISTER::BOVL)) * 0.003125F;
-      extractHighWord(&BusOverVolt, ptr);
-      break;
-    }
+  case 23:
+  {
+    return BusOverVolt.word[1];
+    break;
+  }
 
-    case 23:
-    {
-      extractLowWord(&BusOverVolt, ptr);
-      break;
-    }
+  case 24:
+  {
+    BusUnderVolt.dblvalue = (double)i2c_readword(INA_REGISTER::BUVL) * 0.003125F;
+    return BusOverVolt.word[0];
+    break;
+  }
 
-    case 24:
-    {
-      BusUnderVolt = (double)i2c_readword(INA_REGISTER::BUVL) * 0.003125F;
-      extractHighWord(&BusUnderVolt, ptr);
-      break;
-    }
+  case 25:
+  {
+    return BusOverVolt.word[1];
+    break;
+  }
 
-    case 25:
-    {
-      extractLowWord(&BusUnderVolt, ptr);
-      break;
-    }
+  case 26:
+  {
+    //Shunt Over Voltage Limit (current limit)
+    int16_t value = i2c_readword(INA_REGISTER::SOVL);
 
-    case 26:
-    {
-      //Shunt Over Voltage Limit (current limit)
-      int16_t value = i2c_readword(INA_REGISTER::SOVL);
+    //1.25 µV/LSB
+    ShuntOverCurrentLimit.dblvalue = ((double)value / 1000 * 1.25) / full_scale_adc * full_scale_current;
 
-      //1.25 µV/LSB
-      ShuntOverCurrentLimit = ((double)value / 1000 * 1.25) / full_scale_adc * full_scale_current;
+    return ShuntOverCurrentLimit.word[1];
+    break;
+  }
+  case 27:
+  {
+    return ShuntOverCurrentLimit.word[1];
+    break;
+  }
 
-      extractHighWord(&ShuntOverCurrentLimit, ptr);
-      break;
-    }
-    case 27:
-    {
-      extractLowWord(&ShuntOverCurrentLimit, ptr);
-      break;
-    }
+  case 28:
+  {
+    //Shunt UNDER Voltage Limit (under current limit)
+    int16_t value = i2c_readword(INA_REGISTER::SUVL);
 
-    case 28:
-    {
-      //Shunt UNDER Voltage Limit (under current limit)
-      int16_t value = i2c_readword(INA_REGISTER::SUVL);
+    //const double x = (0.725 / full_scale_current) * full_scale_adc;
+    //int16_t CurrentOverThreshold = (x * 1000.0 / 1.24);
 
-      //const double x = (0.725 / full_scale_current) * full_scale_adc;
-      //int16_t CurrentOverThreshold = (x * 1000.0 / 1.24);
+    ShuntUnderCurrentLimit.dblvalue = ((double)value / 1000 * 1.25) / full_scale_adc * full_scale_current;
 
-      ShuntUnderCurrentLimit = ((double)value / 1000 * 1.25) / full_scale_adc * full_scale_current;
+    return ShuntUnderCurrentLimit.word[0];
+    break;
+  }
+  case 29:
+  {
+    return ShuntUnderCurrentLimit.word[1];
+    break;
+  }
 
-      extractHighWord(&ShuntUnderCurrentLimit, ptr);
-      break;
-    }
-    case 29:
-    {
-      extractLowWord(&ShuntUnderCurrentLimit, ptr);
-      break;
-    }
+  case 30:
+  {
+    //Shunt Over POWER LIMIT
+    PowerLimit.dblvalue = (uint16_t)i2c_readword(INA_REGISTER::PWR_LIMIT);
+    PowerLimit.dblvalue = PowerLimit.dblvalue * 256 * 3.2 * CURRENT_LSB;
+    return PowerLimit.word[0];
+    break;
+  }
+  case 31:
+  {
+    return PowerLimit.word[1];
+    break;
+  }
 
-    case 30:
-    {
-      //Shunt Over POWER LIMIT
-      PowerLimit = (uint16_t)i2c_readword(INA_REGISTER::PWR_LIMIT);
-      PowerLimit = PowerLimit * 256 * 3.2 * CURRENT_LSB;
-      extractHighWord(&PowerLimit, ptr);
-      break;
-    }
-    case 31:
-    {
-      extractLowWord(&PowerLimit, ptr);
-      break;
-    }
+    //These settings would probably be better in a 0x2B function code
+    //https://modbus.org/docs/Modbus_Application_Protocol_V1_1b.pdf
+  case 49:
+  {
+    //GITHUB version
+    return GIT_VERSION_B1;
+    break;
+  }
+  case 50:
+  {
+    //GITHUB version
+    return GIT_VERSION_B2;
+    break;
+  }
 
-      //These settings would probably be better in a 0x2B function code
-      //https://modbus.org/docs/Modbus_Application_Protocol_V1_1b.pdf
-    case 49:
-    {
-      //GITHUB version
-      sendbuff[ptr] = (uint8_t)(GIT_VERSION_B1 >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(GIT_VERSION_B1 & 0x00FF);
-      break;
-    }
-    case 50:
-    {
-      //GITHUB version
-      sendbuff[ptr] = (uint8_t)(GIT_VERSION_B2 >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(GIT_VERSION_B2 & 0x00FF);
-      break;
-    }
+  case 51:
+  {
+    //COMPILE_DATE_TIME_EPOCH
+    return (uint16_t)COMPILE_DATE_TIME_UTC_EPOCH;
+    break;
+  }
+  case 52:
+  {
+    //COMPILE_DATE_TIME_EPOCH
+    uint32_t x = COMPILE_DATE_TIME_UTC_EPOCH >> 16;
+    return (uint16_t)x;
+    break;
+  }
 
-    case 51:
-    {
-      //COMPILE_DATE_TIME_EPOCH
-      sendbuff[ptr] = (uint8_t)(COMPILE_DATE_TIME_UTC_EPOCH >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(COMPILE_DATE_TIME_UTC_EPOCH & 0x00FF);
-      break;
-    }
-    case 52:
-    {
-      //COMPILE_DATE_TIME_EPOCH
-      sendbuff[ptr] = (uint8_t)(COMPILE_DATE_TIME_UTC_EPOCH >> 24);
-      sendbuff[ptr + 1] = (uint8_t)(COMPILE_DATE_TIME_UTC_EPOCH >> 16 & 0x00FF);
-      break;
-    }
+  case 53:
+  {
+    //INAXXX chip model number (should always be 0x0228)
+    uint16_t dieid = i2c_readword(INA_REGISTER::DIE_ID);
+    dieid = (dieid & 0xFFF0) >> 4;
+    return dieid;
+    break;
+  }
 
-    case 53:
-    {
-      //INAXXX chip model number (should always be 0x0228)
-      uint16_t dieid = i2c_readword(INA_REGISTER::DIE_ID);
-      dieid = (dieid & 0xFFF0) >> 4;
-      sendbuff[ptr] = (uint8_t)(dieid >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(dieid & 0x00FF);
-      break;
-    }
+  case 59:
+  {
+    return i2c_readword(INA_REGISTER::CONFIG);
 
-    case 59:
-    {
-      uint16_t x = i2c_readword(INA_REGISTER::CONFIG);
-      sendbuff[ptr] = (uint8_t)(x >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
-      break;
-    }
-    case 60:
-    {
-      uint16_t x = i2c_readword(INA_REGISTER::ADC_CONFIG);
-      sendbuff[ptr] = (uint8_t)(x >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
-      break;
-    }
-    case 61:
-    {
-      uint16_t x = i2c_readword(INA_REGISTER::SHUNT_CAL);
-      sendbuff[ptr] = (uint8_t)(x >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
-      break;
-    }
-    case 62:
-    {
-      uint16_t x = i2c_readword(INA_REGISTER::SHUNT_TEMPCO);
-      sendbuff[ptr] = (uint8_t)(x >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
-      break;
-    }
-    case 63:
-    {
-      uint16_t x = i2c_readword(INA_REGISTER::DIAG_ALRT);
-      sendbuff[ptr] = (uint8_t)(x >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
-      break;
-    }
-    case 64:
-    {
-      uint16_t x = i2c_readword(INA_REGISTER::SOVL);
-      sendbuff[ptr] = (uint8_t)(x >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
-      break;
-    }
-    case 65:
-    {
-      uint16_t x = i2c_readword(INA_REGISTER::SUVL);
-      sendbuff[ptr] = (uint8_t)(x >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
-      break;
-    }
-    case 66:
-    {
-      uint16_t x = i2c_readword(INA_REGISTER::BOVL);
-      sendbuff[ptr] = (uint8_t)(x >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
-      break;
-    }
-    case 67:
-    {
-      uint16_t x = i2c_readword(INA_REGISTER::BUVL);
-      sendbuff[ptr] = (uint8_t)(x >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
-      break;
-    }
-    case 68:
-    {
-      uint16_t x = i2c_readword(INA_REGISTER::TEMP_LIMIT);
-      sendbuff[ptr] = (uint8_t)(x >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
-      break;
-    }
-    case 69:
-    {
-      uint16_t x = i2c_readword(INA_REGISTER::PWR_LIMIT);
-      sendbuff[ptr] = (uint8_t)(x >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
-      break;
-    }
-    case 70:
-    {
-      uint16_t x = i2c_readword(INA_REGISTER::DIETEMP);
-      sendbuff[ptr] = (uint8_t)(x >> 8);
-      sendbuff[ptr + 1] = (uint8_t)(x & 0x00FF);
-      break;
-    }
+    break;
+  }
+  case 60:
+  {
+    return i2c_readword(INA_REGISTER::ADC_CONFIG);
+    break;
+  }
+  case 61:
+  {
+    return i2c_readword(INA_REGISTER::SHUNT_CAL);
+    break;
+  }
+  case 62:
+  {
+    return i2c_readword(INA_REGISTER::SHUNT_TEMPCO);
+    break;
+  }
+  case 63:
+  {
+    return i2c_readword(INA_REGISTER::DIAG_ALRT);
+    break;
+  }
+  case 64:
+  {
+    return i2c_readword(INA_REGISTER::SOVL);
+    break;
+  }
+  case 65:
+  {
+    return i2c_readword(INA_REGISTER::SUVL);
+    break;
+  }
+  case 66:
+  {
+    return i2c_readword(INA_REGISTER::BOVL);
+    break;
+  }
+  case 67:
+  {
+    return i2c_readword(INA_REGISTER::BUVL);
+    break;
+  }
+  case 68:
+  {
+    return i2c_readword(INA_REGISTER::TEMP_LIMIT);
+    break;
+  }
+  case 69:
+  {
+    return i2c_readword(INA_REGISTER::PWR_LIMIT);
+    break;
+  }
+  case 70:
+  {
+    return i2c_readword(INA_REGISTER::DIETEMP);
+    break;
+  }
 
-    default:
-    {
-      break;
-    }
-    } //end switch
+  } //end switch
 
-    ptr += 2;
-  } //end for
-
-  return ptr;
+  return 0;
 }
 
 void loop()
@@ -1360,6 +1310,9 @@ void loop()
     }
   }
 
+  modbus_update();
+
+  /*
   while (Serial.available())
   {
 
@@ -1425,7 +1378,7 @@ void loop()
     } //end of if
 
   } //end while
-
+*/
   if (millis() > timer)
   {
 

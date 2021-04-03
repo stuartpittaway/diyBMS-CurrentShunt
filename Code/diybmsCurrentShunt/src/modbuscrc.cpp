@@ -23,3 +23,4 @@ uint16_t ModbusRTU_CRC(uint8_t *buf, uint8_t len)
   // Note, this number has low and high bytes swapped, so use it accordingly (or swap bytes)
   return crc;
 }
+
