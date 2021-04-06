@@ -782,8 +782,8 @@ void setup()
   ReadJumperPins();
 
   //Disable RS485 receiver (debug!)
-  PORTB.OUTSET = PIN0_bm;
-  PORTB.PIN0CTRL = 0;
+  //PORTB.OUTSET = PIN0_bm;
+  //PORTB.PIN0CTRL = 0;
 
   ConfigureI2C();
 
@@ -791,7 +791,7 @@ void setup()
   Serial.begin(ModBusBaudRate, MODBUSSERIALCONFIG);
 
   //0x01= Enables RS-485 mode with control of an external line driver through a dedicated Transmit Enable (TE) pin.
-  //USART0.CTRLA |= B00000001;
+  USART0.CTRLA |= B00000001;
 
   wdt_triggered = false;
 
