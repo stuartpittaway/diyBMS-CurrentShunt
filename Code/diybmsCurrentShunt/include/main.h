@@ -55,3 +55,4 @@ const uint16_t ALL_ALERT_BITS = (bit(DIAG_ALRT_FIELD::TMPOL) |
 
 void RedLED(bool value);
 void GreenLED(bool value);
+void CalculateLSB();

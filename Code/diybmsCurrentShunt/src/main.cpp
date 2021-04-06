@@ -50,10 +50,12 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 #include <Wire.h>
 #include <EEPROM.h>
 
+#include <FastCRC.h>
+
+FastCRC16 CRC16;
+
 #include "main.h"
 #include "settings.h"
-
-#include "modbuscrc.h"
 
 #include "EmbeddedFiles_Defines.h"
 
@@ -63,10 +65,7 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 #define REDLED_PIN_BITMAP PIN6_bm
 #define RELAY_PIN_BITMAP PIN5_bm
 
-//150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
 
-//Scale the full current based on 40.96mV (max range for 20bit ADC)
-//const double full_scale_current = shunt_max_current;
 
 typedef union
 {
@@ -115,13 +114,14 @@ struct eeprom_regs
 
   uint16_t shunt_max_current;
   uint16_t shunt_millivolt;
+
+  double full_scale_current;
+  double CURRENT_LSB;
+  double RSHUNT;
 };
 
 eeprom_regs registers;
 
-double full_scale_current;
-double CURRENT_LSB;
-double RSHUNT;
 double amphour_in = 0;
 double amphour_out = 0;
 
@@ -415,35 +415,159 @@ volatile uint16_t diag_alrt_value = 0;
 
 void SetINA228Registers()
 {
-  if (!i2c_writeword(INA_REGISTER::SHUNT_CAL, registers.R_SHUNT_CAL))
+  uint8_t result = 0;
+  result += i2c_writeword(INA_REGISTER::SHUNT_CAL, registers.R_SHUNT_CAL);
+  result += i2c_writeword(INA_REGISTER::SHUNT_TEMPCO, registers.R_SHUNT_TEMPCO);
+  result += i2c_writeword(INA_REGISTER::SOVL, registers.R_SOVL);
+  result += i2c_writeword(INA_REGISTER::SUVL, registers.R_SUVL);
+  result += i2c_writeword(INA_REGISTER::BOVL, registers.R_BOVL);
+  result += i2c_writeword(INA_REGISTER::BUVL, registers.R_BUVL);
+  result += i2c_writeword(INA_REGISTER::TEMP_LIMIT, registers.R_TEMP_LIMIT);
+  result += i2c_writeword(INA_REGISTER::PWR_LIMIT, registers.R_PWR_LIMIT);
+
+  if (result != 8)
   {
     i2c_error();
   }
-  //result += i2c_writeword(INA_REGISTER::SHUNT_TEMPCO, registers.R_SHUNT_TEMPCO))  {    i2c_error();  }
-  if (!i2c_writeword(INA_REGISTER::SOVL, registers.R_SOVL))
+}
+
+void SaveConfig()
+{
+  WriteConfigToEEPROM((uint8_t *)&registers, sizeof(eeprom_regs));
+}
+
+bool SetRegister(uint16_t address, uint16_t value)
+{
+  static DoubleUnionType newvalue;
+
+  switch (address)
   {
-    i2c_error();
-  }
-  if (!i2c_writeword(INA_REGISTER::SUVL, registers.R_SUVL))
+  case 4:
+  case 6:
+  case 22:
+  case 24:
+  case 26:
+  case 28:
+  case 30:
   {
-    i2c_error();
+    //Set word[0] in preperation for the next register to be written
+    newvalue.word[0] = value;
+    break;
   }
-  if (!i2c_writeword(INA_REGISTER::BOVL, registers.R_BOVL))
+
+  case 5:
   {
-    i2c_error();
+    //amphour_out
+    newvalue.word[1] = value;
+    amphour_out = newvalue.dblvalue;
+    break;
   }
-  if (!i2c_writeword(INA_REGISTER::BUVL, registers.R_BUVL))
+
+  case 7:
   {
-    i2c_error();
+    //amphour_in
+    newvalue.word[1] = value;
+    amphour_in = newvalue.dblvalue;
+    break;
   }
-  if (!i2c_writeword(INA_REGISTER::TEMP_LIMIT, registers.R_TEMP_LIMIT))
+
+  case 9:
   {
-    i2c_error();
+    //Watchdog timer trigger count (like error counter)
+    wdt_triggered_count = value;
+    break;
   }
-  if (!i2c_writeword(INA_REGISTER::PWR_LIMIT, registers.R_PWR_LIMIT))
+
+  case 18:
   {
-    i2c_error();
+    registers.shunt_max_current = value;
+    CalculateLSB();
+    break;
   }
+  case 19:
+  {
+    registers.shunt_millivolt = value;
+    CalculateLSB();
+    break;
+  }
+
+  case 20:
+  {
+    //SHUNT_CAL register
+    registers.R_SHUNT_CAL = value;
+    break;
+  }
+
+  case 21:
+  {
+    //temperature limit
+    //Case unsigned to int16 to cope with negative temperatures
+    registers.R_TEMP_LIMIT = (int16_t)value / (double)0.0078125;
+    break;
+  }
+
+  case 23:
+  {
+    //Bus Overvoltage (overvoltage protection).
+    //Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
+    //BusOverVolt.dblvalue = ((double)(uint16_t)i2c_readword(INA_REGISTER::BOVL)) * 0.003125F;
+    newvalue.word[1] = value;
+    registers.R_BOVL = newvalue.dblvalue / 0.003125F;
+    //TODO: Save the new value
+    break;
+  }
+
+  case 25:
+  {
+    //Bus under voltage
+    newvalue.word[1] = value;
+    registers.R_BUVL = newvalue.dblvalue / 0.003125F;
+    break;
+  }
+
+  case 27:
+  {
+    //Shunt Over Voltage Limit (current limit)
+    newvalue.word[1] = value;
+    registers.R_SOVL = (newvalue.dblvalue * 1000 / 1.25) * full_scale_adc / registers.full_scale_current;
+
+    break;
+  }
+
+  case 29:
+  {
+    //Shunt UNDER Voltage Limit (under current limit)
+    newvalue.word[1] = value;
+    registers.R_SUVL = (newvalue.dblvalue * 1000 / 1.25) * full_scale_adc / registers.full_scale_current;
+    break;
+  }
+
+  case 31:
+  {
+    //Shunt Over POWER LIMIT
+    newvalue.word[1] = value;
+    registers.R_PWR_LIMIT = (uint16_t)(newvalue.dblvalue / 256.0 / 3.2 / registers.CURRENT_LSB);
+    break;
+  }
+
+  case 32:
+  {
+    //Shunt Temperature Coefficient
+    registers.R_SHUNT_TEMPCO = value;
+    break;
+  }
+
+  default:
+  {
+    return false;
+    break;
+  }
+  }
+
+  SaveConfig();
+  SetINA228Registers();
+
+  return true;
 }
 
 void ConfigureI2C()
@@ -471,12 +595,6 @@ void ConfigureI2C()
   //Allow the reset to work
   delay(100);
 
-  // and configure our registers (after reset)
-  if (!i2c_writeword(INA_REGISTER::CONFIG, R_CONFIG))
-  {
-    i2c_error();
-  }
-
   //Get the INA chip model number (make sure we are dealing with an INA228)
 
   //Clear lower 4 bits, holds chip revision (zero in my case)
@@ -488,12 +606,18 @@ void ConfigureI2C()
     i2c_error();
   }
 
+  // Configure our registers (after reset)
+  if (!i2c_writeword(INA_REGISTER::CONFIG, R_CONFIG))
+  {
+    i2c_error();
+  }
+
   if (!i2c_writeword(INA_REGISTER::ADC_CONFIG, registers.R_ADC_CONFIG))
   {
     i2c_error();
   }
 
-  //shunt cal
+  //Shunt cal
   if (!i2c_writeword(INA_REGISTER::SHUNT_CAL, registers.R_SHUNT_CAL))
   {
     i2c_error();
@@ -552,9 +676,16 @@ void ConfigureI2C()
 
 void CalculateLSB()
 {
-  full_scale_current = ((double)registers.shunt_max_current / (double)registers.shunt_millivolt) * full_scale_adc;
-  RSHUNT = ((double)registers.shunt_millivolt / 1000.0) / (double)registers.shunt_max_current;
-  CURRENT_LSB = full_scale_current / (double)0x80000;
+  //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
+  // Each LSB on the 20 bit ADC (524288 possibl values) is 122.88/524288 = 0.000234375A
+  // Resistance (RSHUNT) = 0.00033333333333
+
+  // Shunt calibration = 52428800000 * 0.000234375 * 0.00033333333333 = 4095.999999 = 4096
+
+  registers.full_scale_current = ((double)registers.shunt_max_current / (double)registers.shunt_millivolt) * full_scale_adc;
+  registers.RSHUNT = ((double)registers.shunt_millivolt / 1000.0) / (double)registers.shunt_max_current;
+  registers.CURRENT_LSB = registers.full_scale_current / (double)0x80000;
+  registers.R_SHUNT_CAL = 4 * 13107200000 * registers.CURRENT_LSB * registers.RSHUNT;
 }
 
 void setup()
@@ -611,8 +742,9 @@ void setup()
     //SLOWALERT = Wait for full sample averaging time before triggering alert (about 1.5 seconds)
     registers.R_DIAG_ALRT = bit(DIAG_ALRT_FIELD::SLOWALERT);
 
-    //This is not enabled by CONFIG
-    registers.R_SHUNT_TEMPCO = 0x1000;
+    //This is not enabled by default
+    //The 16 bit register provides a resolution of 1ppm/°C/LSB
+    registers.R_SHUNT_TEMPCO = 15;
 
     //Read the defaults from the INA228 chip as a starting point
     registers.R_SOVL = 0x7FFF;
@@ -625,7 +757,7 @@ void setup()
     CalculateLSB();
 
     //Default Power limit = 5kW
-    registers.R_PWR_LIMIT = (uint16_t)((5000.0 / CURRENT_LSB / 3.2) / 256.0); //5kW
+    registers.R_PWR_LIMIT = (uint16_t)((5000.0 / registers.CURRENT_LSB / 3.2) / 256.0); //5kW
 
     //By default, trigger relay on all alerts
     registers.relay_trigger_bitmap = ALL_ALERT_BITS;
@@ -684,14 +816,14 @@ double ShuntVoltage()
 double Energy()
 {
   uint64_t energy = i2c_readUint40(INA_REGISTER::ENERGY);
-  return 16.0 * 3.2 * CURRENT_LSB * energy;
+  return 16.0 * 3.2 * registers.CURRENT_LSB * energy;
 }
 
 // Charge in Coulombs
 double Charge()
 {
   int64_t charge = i2c_readInt40(INA_REGISTER::CHARGE);
-  return CURRENT_LSB * (int32_t)charge;
+  return registers.CURRENT_LSB * (int32_t)charge;
 }
 
 double Power()
@@ -700,7 +832,7 @@ double Power()
   //Output value in watts.
   //Unsigned representation. Positive value.
   //POWER Power [W] = 3.2 x CURRENT_LSB x POWER
-  return (double)i2c_readUint24(INA_REGISTER::POWER) * (double)3.2 * CURRENT_LSB;
+  return (double)i2c_readUint24(INA_REGISTER::POWER) * (double)3.2 * registers.CURRENT_LSB;
 }
 
 double DieTemperature()
@@ -728,7 +860,7 @@ double Current()
 {
   //Current.
   //Calculated current output in Amperes. Two's complement value.
-  return CURRENT_LSB * (double)i2c_readInt24(INA_REGISTER::CURRENT);
+  return registers.CURRENT_LSB * (double)i2c_readInt24(INA_REGISTER::CURRENT);
 }
 
 ISR(PORTB_PORT_vect)
@@ -743,24 +875,6 @@ ISR(PORTB_PORT_vect)
     ALERT_TRIGGERED = true;
   }
 }
-/*
-
-void extractHighWord(double *value, const uint8_t index)
-{
-  //Convert double to an array of bytes
-  uint8_t *i = (uint8_t *)value;
-  sendbuff[index] = i[0 + 1];
-  sendbuff[index + 1] = i[0 + 0];
-}
-
-void extractLowWord(double *value, const uint8_t index)
-{
-  //Convert double to an array of bytes
-  uint8_t *i = (uint8_t *)value;
-  sendbuff[index] = i[2 + 1];
-  sendbuff[index + 1] = i[2 + 0];
-}
-*/
 
 //Modbus command 2 Read Discrete Inputs
 //This assumes the byte array pointed to by *frame has been
@@ -862,6 +976,11 @@ uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity, uint8_t *frame)
       outcome = relay_state;
       break;
     }
+    case 15:
+    {
+      //Factory reset - always FALSE
+      break;
+    }
 
     default:
     {
@@ -884,7 +1003,7 @@ uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity, uint8_t *frame)
   }
 
   //Return number of bytes we have populated
-  return 1+ptr;
+  return 1 + ptr;
 }
 
 uint16_t ReadHoldingRegister(uint16_t address)
@@ -1015,7 +1134,7 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   case 14:
   {
-    copy_current_lsb.dblvalue = CURRENT_LSB;
+    copy_current_lsb.dblvalue = registers.CURRENT_LSB;
     return copy_current_lsb.word[0];
     break;
   }
@@ -1027,7 +1146,7 @@ uint16_t ReadHoldingRegister(uint16_t address)
   }
   case 16:
   {
-    copy_shunt_resistance.dblvalue = RSHUNT;
+    copy_shunt_resistance.dblvalue = registers.RSHUNT;
     return copy_shunt_resistance.word[0];
     break;
   }
@@ -1053,8 +1172,6 @@ uint16_t ReadHoldingRegister(uint16_t address)
   {
     //SHUNT_CAL register
     return i2c_readword(INA_REGISTER::SHUNT_CAL);
-    //sendbuff[ptr] = (uint8_t)(shunt_cal_value >> 8);
-    //sendbuff[ptr + 1] = (uint8_t)(shunt_cal_value & 0x00FF);
     break;
   }
 
@@ -1099,9 +1216,9 @@ uint16_t ReadHoldingRegister(uint16_t address)
     int16_t value = i2c_readword(INA_REGISTER::SOVL);
 
     //1.25 µV/LSB
-    ShuntOverCurrentLimit.dblvalue = ((double)value / 1000 * 1.25) / full_scale_adc * full_scale_current;
+    ShuntOverCurrentLimit.dblvalue = ((double)value / 1000 * 1.25) / full_scale_adc * registers.full_scale_current;
 
-    return ShuntOverCurrentLimit.word[1];
+    return ShuntOverCurrentLimit.word[0];
     break;
   }
   case 27:
@@ -1118,7 +1235,7 @@ uint16_t ReadHoldingRegister(uint16_t address)
     //const double x = (0.725 / full_scale_current) * full_scale_adc;
     //int16_t CurrentOverThreshold = (x * 1000.0 / 1.24);
 
-    ShuntUnderCurrentLimit.dblvalue = ((double)value / 1000 * 1.25) / full_scale_adc * full_scale_current;
+    ShuntUnderCurrentLimit.dblvalue = ((double)value / 1000 * 1.25) / full_scale_adc * registers.full_scale_current;
 
     return ShuntUnderCurrentLimit.word[0];
     break;
@@ -1133,7 +1250,7 @@ uint16_t ReadHoldingRegister(uint16_t address)
   {
     //Shunt Over POWER LIMIT
     PowerLimit.dblvalue = (uint16_t)i2c_readword(INA_REGISTER::PWR_LIMIT);
-    PowerLimit.dblvalue = PowerLimit.dblvalue * 256 * 3.2 * CURRENT_LSB;
+    PowerLimit.dblvalue = PowerLimit.dblvalue * 256 * 3.2 * registers.CURRENT_LSB;
     return PowerLimit.word[0];
     break;
   }
@@ -1143,36 +1260,14 @@ uint16_t ReadHoldingRegister(uint16_t address)
     break;
   }
 
-    //These settings would probably be better in a 0x2B function code
-    //https://modbus.org/docs/Modbus_Application_Protocol_V1_1b.pdf
-  case 49:
+  case 32:
   {
-    //GITHUB version
-    return GIT_VERSION_B1;
-    break;
-  }
-  case 50:
-  {
-    //GITHUB version
-    return GIT_VERSION_B2;
+    //Shunt Temperature Coefficient
+    return (uint16_t)i2c_readword(INA_REGISTER::SHUNT_TEMPCO);
     break;
   }
 
-  case 51:
-  {
-    //COMPILE_DATE_TIME_EPOCH
-    return (uint16_t)COMPILE_DATE_TIME_UTC_EPOCH;
-    break;
-  }
-  case 52:
-  {
-    //COMPILE_DATE_TIME_EPOCH
-    uint32_t x = COMPILE_DATE_TIME_UTC_EPOCH >> 16;
-    return (uint16_t)x;
-    break;
-  }
-
-  case 53:
+  case 33:
   {
     //INAXXX chip model number (should always be 0x0228)
     uint16_t dieid = i2c_readword(INA_REGISTER::DIE_ID);
@@ -1181,63 +1276,97 @@ uint16_t ReadHoldingRegister(uint16_t address)
     break;
   }
 
-  case 59:
+  //These settings would probably be better in a 0x2B function code
+  //https://modbus.org/docs/Modbus_Application_Protocol_V1_1b.pdf
+  case 34:
   {
-    return i2c_readword(INA_REGISTER::CONFIG);
-
+    //GITHUB version
+    return GIT_VERSION_B1;
     break;
   }
-  case 60:
+  case 35:
+  {
+    //GITHUB version
+    return GIT_VERSION_B2;
+    break;
+  }
+
+  case 36:
+  {
+    //COMPILE_DATE_TIME_EPOCH
+    return (uint16_t)COMPILE_DATE_TIME_UTC_EPOCH;
+    break;
+  }
+  case 37:
+  {
+    //COMPILE_DATE_TIME_EPOCH
+    uint32_t x = COMPILE_DATE_TIME_UTC_EPOCH >> 16;
+    return (uint16_t)x;
+    break;
+  }
+  case 38:
+  {
+    //Spare
+    return 0x7890;
+    break;
+  }
+
+  case 39:
+  {
+    return i2c_readword(INA_REGISTER::CONFIG);
+    break;
+  }
+  case 40:
   {
     return i2c_readword(INA_REGISTER::ADC_CONFIG);
     break;
   }
-  case 61:
+  case 41:
   {
     return i2c_readword(INA_REGISTER::SHUNT_CAL);
     break;
   }
-  case 62:
+  case 42:
   {
     return i2c_readword(INA_REGISTER::SHUNT_TEMPCO);
     break;
   }
-  case 63:
+  case 43:
   {
     return i2c_readword(INA_REGISTER::DIAG_ALRT);
     break;
   }
-  case 64:
+  case 44:
   {
     return i2c_readword(INA_REGISTER::SOVL);
     break;
   }
-  case 65:
+  case 45:
   {
     return i2c_readword(INA_REGISTER::SUVL);
     break;
   }
-  case 66:
+  case 46:
   {
     return i2c_readword(INA_REGISTER::BOVL);
     break;
   }
-  case 67:
+  case 47:
   {
     return i2c_readword(INA_REGISTER::BUVL);
     break;
   }
-  case 68:
+  case 48:
   {
     return i2c_readword(INA_REGISTER::TEMP_LIMIT);
     break;
   }
-  case 69:
+  case 49:
   {
     return i2c_readword(INA_REGISTER::PWR_LIMIT);
     break;
   }
-  case 70:
+  case 50:
   {
     return i2c_readword(INA_REGISTER::DIETEMP);
     break;

@@ -51,6 +51,7 @@
 */
 
 #include "Arduino.h"
+#include <FastCRC.h>
 
 // function definitions
 unsigned int modbus_update();
@@ -60,4 +61,6 @@ void modbus_configure(UartClass *SerialPort,long baud);
 extern uint8_t ModbusSlaveAddress;
 extern uint16_t ReadHoldingRegister(uint16_t address);
 extern uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity, uint8_t* frame);
+extern bool SetRegister(uint16_t address, uint16_t value);
+extern FastCRC16 CRC16;
 #endif

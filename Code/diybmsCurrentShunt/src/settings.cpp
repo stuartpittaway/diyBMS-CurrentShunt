@@ -1,10 +1,22 @@
 #include "settings.h"
 
-#include "modbuscrc.h"
 
 void WriteConfigToEEPROM(uint8_t *settings, uint16_t size)
 {
   //TODO: We should probably check EEPROM.length() to ensure its big enough
+
+  //Generate and save the checksum for the setting data block
+  
+  uint16_t checksum = CRC16.modbus(settings,size);
+
+  uint16_t existingChecksum;
+  EEPROM.get(0, existingChecksum);
+
+  if (checksum == existingChecksum && checksum!=0)
+  {
+    //nothing has changed, so just return
+    return;
+  }
 
   //Start write at address 2, checksum is bytes 0 and 1
   uint16_t EEPROMaddress = 2;
@@ -14,8 +26,6 @@ void WriteConfigToEEPROM(uint8_t *settings, uint16_t size)
     EEPROMaddress++;
   }
 
-  //Generate and save the checksum for the setting data block
-  uint16_t checksum = ModbusRTU_CRC(settings, size);
   EEPROM.put(0, checksum);
 }
 
@@ -29,7 +39,7 @@ bool ReadConfigFromEEPROM(uint8_t *settings, uint16_t size)
   }
 
   // Calculate the checksum
-  uint16_t checksum = ModbusRTU_CRC(settings, size);
+  uint16_t checksum = CRC16.modbus(settings,size);
 
   uint16_t existingChecksum;
   EEPROM.get(0, existingChecksum);

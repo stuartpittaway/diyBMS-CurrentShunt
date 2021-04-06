@@ -3,14 +3,14 @@
 
 // SimpleModbusSlaveV10
 
-#define BUFFER_SIZE 256
+#define BUFFER_SIZE (64 * 2 + 10)
 
 // frame[] is used to recieve and transmit packages.
 
 uint8_t frame[BUFFER_SIZE];
-uint16_t holdingRegsSize; // size of the register array
+const uint16_t holdingRegsSize = 55; // size of the register array
 
-uint8_t broadcastFlag;
+bool broadcastFlag;
 
 uint8_t function;
 uint16_t errorCount;
@@ -23,14 +23,11 @@ void exceptionResponse(unsigned char exception);
 uint16_t calculateCRC(unsigned char bufferSize);
 void sendPacket(unsigned char bufferSize);
 
-void modbus_configure(UartClass *SerialPort,
-					  long baud
-
-)
+void modbus_configure(UartClass *SerialPort, long baud)
 {
 	ModbusPort = SerialPort;
 
-	holdingRegsSize = 64;
+	//holdingRegsSize = 55;
 	errorCount = 0; // initialize errorCount
 
 	//(*ModbusPort).begin(baud, byteFormat);
@@ -59,6 +56,7 @@ void modbus_configure(UartClass *SerialPort,
 
 unsigned int modbus_update()
 {
+
 	if ((*ModbusPort).available())
 	{
 		unsigned char buffer = 0;
@@ -91,34 +89,35 @@ unsigned int modbus_update()
 		{
 			unsigned char id = frame[0];
 
-			broadcastFlag = 0;
+			broadcastFlag = false;
 
 			if (id == 0)
-				broadcastFlag = 1;
+				broadcastFlag = true;
 
 			if (id == ModbusSlaveAddress || broadcastFlag) // if the recieved ID matches the slaveID or broadcasting id (0), continue
 			{
 				unsigned int crc = ((frame[buffer - 2] << 8) | frame[buffer - 1]); // combine the crc Low & High bytes
-				if (calculateCRC(buffer - 2) == crc)							   // if the calculated crc matches the recieved crc continue
+
+				if (calculateCRC(buffer - 2) == crc) // if the calculated crc matches the recieved crc continue
 				{
 					function = frame[1];
 					uint16_t startingAddress = ((frame[2] << 8) | frame[3]); // combine the starting address bytes
 					uint16_t no_of_registers = ((frame[4] << 8) | frame[5]); // combine the number of register bytes
 					uint16_t maxData = startingAddress + no_of_registers;
-					uint8_t index;
+
 					uint8_t address;
 					uint16_t crc16;
-
-					//Clear output buffer
-					memset(frame, 0, sizeof(frame));
 
 					// broadcasting is not supported for function 2
 					if (!broadcastFlag && (function == 2))
 					{
-						if (startingAddress <= 15 && (startingAddress+no_of_registers) <= 15) // check exception 2 ILLEGAL DATA ADDRESS
+						if (startingAddress <= 16 && (startingAddress + no_of_registers) <= 16) // check exception 2 ILLEGAL DATA ADDRESS
 						{
 							if ((maxData / 8) <= holdingRegsSize) // check exception 3 ILLEGAL DATA VALUE
 							{
+								//Clear output buffer
+								memset(frame, 0, sizeof(frame));
+
 								uint8_t noOfBytes = ReadDiscreteInputs(startingAddress, no_of_registers, &frame[3]);
 								uint8_t responseFrameSize = 5 + noOfBytes;
 								frame[0] = ModbusSlaveAddress;
@@ -144,6 +143,8 @@ unsigned int modbus_update()
 						{
 							if (maxData <= holdingRegsSize) // check exception 3 ILLEGAL DATA VALUE
 							{
+								//Clear output buffer
+								memset(frame, 0, sizeof(frame));
 								unsigned char noOfBytes = no_of_registers * 2;
 								// ID, function, noOfBytes, (dataLo + dataHi)*number of registers,
 								//  crcLo, crcHi
@@ -154,7 +155,7 @@ unsigned int modbus_update()
 								address = 3; // PDU starts at the 4th byte
 								unsigned int temp;
 
-								for (index = startingAddress; index < maxData; index++)
+								for (uint8_t index = startingAddress; index < maxData; index++)
 								{
 									//temp = regs[index];
 									temp = ReadHoldingRegister(index);
@@ -180,17 +181,29 @@ unsigned int modbus_update()
 						if (startingAddress < holdingRegsSize) // check exception 2 ILLEGAL DATA ADDRESS
 						{
 							//Value
-							//new value = ((frame[4] << 8) | frame[5]); // the 4th and 5th elements in frame is the 16 bit data value
+							uint16_t newValue = ((frame[4] << 8) | frame[5]); // the 4th and 5th elements in frame is the 16 bit data value
 
-							// only the first 6 bytes are used for CRC calculation
-							crc16 = calculateCRC(6);
-							frame[6] = crc16 >> 8; // split crc into 2 bytes
-							frame[7] = crc16 & 0xFF;
+							if (SetRegister(startingAddress, newValue))
+							{
 
-							// a function 16 response is an echo of the first 6 bytes from
-							// the request + 2 crc bytes
-							if (!broadcastFlag) // don't respond if it's a broadcast message
-								sendPacket(8);
+								//frame[0] = ModbusSlaveAddress;
+								//frame[1] = function;
+								//frame[2] = noOfBytes;
+
+								// only the first 6 bytes are used for CRC calculation
+								crc16 = calculateCRC(6);
+								frame[6] = crc16 >> 8; // split crc into 2 bytes
+								frame[7] = crc16 & 0xFF;
+
+								// a function 16 response is an echo of the first 6 bytes from
+								// the request + 2 crc bytes
+								if (!broadcastFlag) // don't respond if it's a broadcast message
+									sendPacket(8);
+							}
+							else
+							{
+								exceptionResponse(2); // exception 2 ILLEGAL DATA ADDRESS
+							}
 						}
 						else
 							exceptionResponse(2); // exception 2 ILLEGAL DATA ADDRESS
@@ -209,7 +222,7 @@ unsigned int modbus_update()
 								{
 									address = 7; // start at the 8th byte in the frame
 
-									for (index = startingAddress; index < maxData; index++)
+									for (uint8_t index = startingAddress; index < maxData; index++)
 									{
 
 										//regs[index] = ((frame[address] << 8) | frame[address + 1]);
@@ -248,7 +261,7 @@ unsigned int modbus_update()
 	return errorCount;
 }
 
-void exceptionResponse(unsigned char exception)
+void exceptionResponse(uint8_t exception)
 {
 	// each call to exceptionResponse() will increment the errorCount
 	errorCount++;
@@ -266,7 +279,14 @@ void exceptionResponse(unsigned char exception)
 	}
 }
 
-unsigned int calculateCRC(unsigned char bufferSize)
+uint16_t calculateCRC(uint8_t bufferSize)
+{
+	uint16_t temp = CRC16.modbus(frame, bufferSize);
+	return (temp << 8) | (temp >> 8);
+}
+
+/*
+uint16_t calculateCRC(uint8_t bufferSize)
 {
 	unsigned int temp, temp2, flag;
 	temp = 0xFFFF;
@@ -289,9 +309,13 @@ unsigned int calculateCRC(unsigned char bufferSize)
 	// crcLo byte is first & crcHi byte is last
 	return temp;
 }
+*/
 
 void sendPacket(unsigned char bufferSize)
 {
+	//ATTINY1614 has automatic control of TxEnablePin via hardware
+	//for RS485 control
+
 	//digitalWrite(TxEnablePin, HIGH);
 
 	for (unsigned char i = 0; i < bufferSize; i++)

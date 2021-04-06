@@ -23,9 +23,10 @@ http://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-8495-8-bit-AVR-Microcontro
 */
 
 #include <EEPROM.h>
+#include <FastCRC.h>
 
 void WriteConfigToEEPROM(uint8_t* settings, uint16_t size);
 bool ReadConfigFromEEPROM(uint8_t* settings, uint16_t size);
 void FactoryDefault(uint16_t size);
-
+extern FastCRC16 CRC16;
 #endif
