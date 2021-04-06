@@ -575,7 +575,6 @@ void setup()
   GreenLED(false);
   EnableWatchdog();
 
-  /*
   if (ReadConfigFromEEPROM((uint8_t *)&registers, sizeof(eeprom_regs)) == false)
   {
     //Flash RED led 5 times to indicate facory reset
@@ -586,52 +585,51 @@ void setup()
       RedLED(false);
       delay(200);
     }
-*/
 
-  //EEPROM is invalid, so apply "factory" defaults
+    //EEPROM is invalid, so apply "factory" defaults
 
-  //Clear structure
-  memset(&registers, 0, sizeof(eeprom_regs));
+    //Clear structure
+    memset(&registers, 0, sizeof(eeprom_regs));
 
-  //Conversion times for voltage and current = 2074us
-  //temperature = 540us
-  //256 times sample averaging
-  // 1111 = Continuous bus, shunt voltage and temperature
-  // 110 = 6h = 2074 µs BUS VOLT
-  // 110 = 6h = 2074 µs CURRENT
-  // 100 = 4h = 540 µs TEMPERATURE
-  // 101 = 5h = 256 ADC sample averaging count
-  // B1111 110 110 100 101
-  //                   AVG
-  registers.R_ADC_CONFIG = 0xFDA5;
+    //Conversion times for voltage and current = 2074us
+    //temperature = 540us
+    //256 times sample averaging
+    // 1111 = Continuous bus, shunt voltage and temperature
+    // 110 = 6h = 2074 µs BUS VOLT
+    // 110 = 6h = 2074 µs CURRENT
+    // 100 = 4h = 540 µs TEMPERATURE
+    // 101 = 5h = 256 ADC sample averaging count
+    // B1111 110 110 100 101
+    //                   AVG
+    registers.R_ADC_CONFIG = 0xFDA5;
 
-  //Default 150A shunt @ 50mV scale
-  registers.R_SHUNT_CAL = 0x1000;
-  registers.shunt_max_current = 150;
-  registers.shunt_millivolt = 50;
+    //Default 150A shunt @ 50mV scale
+    registers.R_SHUNT_CAL = 0x1000;
+    registers.shunt_max_current = 150;
+    registers.shunt_millivolt = 50;
 
-  //SLOWALERT = Wait for full sample averaging time before triggering alert (about 1.5 seconds)
-  registers.R_DIAG_ALRT = bit(DIAG_ALRT_FIELD::SLOWALERT);
+    //SLOWALERT = Wait for full sample averaging time before triggering alert (about 1.5 seconds)
+    registers.R_DIAG_ALRT = bit(DIAG_ALRT_FIELD::SLOWALERT);
 
-  //This is not enabled by CONFIG
-  registers.R_SHUNT_TEMPCO = 0x1000;
+    //This is not enabled by CONFIG
+    registers.R_SHUNT_TEMPCO = 0x1000;
 
-  //Read the defaults from the INA228 chip as a starting point
-  registers.R_SOVL = 0x7FFF;
-  registers.R_SUVL = 0x8000;
-  //85volt max
-  registers.R_BOVL = 0x6A40; //i2c_readword(INA_REGISTER::BOVL);
-  registers.R_BUVL = 0;
-  registers.R_TEMP_LIMIT = 0x2800; //80 degrees C
+    //Read the defaults from the INA228 chip as a starting point
+    registers.R_SOVL = 0x7FFF;
+    registers.R_SUVL = 0x8000;
+    //85volt max
+    registers.R_BOVL = 0x6A40; //i2c_readword(INA_REGISTER::BOVL);
+    registers.R_BUVL = 0;
+    registers.R_TEMP_LIMIT = 0x2800; //80 degrees C
 
-  CalculateLSB();
+    CalculateLSB();
 
-  //Default Power limit = 5kW
-  registers.R_PWR_LIMIT = (uint16_t)((5000.0 / CURRENT_LSB / 3.2) / 256.0); //5kW
+    //Default Power limit = 5kW
+    registers.R_PWR_LIMIT = (uint16_t)((5000.0 / CURRENT_LSB / 3.2) / 256.0); //5kW
 
-  //By default, trigger relay on all alerts
-  registers.relay_trigger_bitmap = ALL_ALERT_BITS;
-  //  }
+    //By default, trigger relay on all alerts
+    registers.relay_trigger_bitmap = ALL_ALERT_BITS;
+  }
 
   for (size_t i = 0; i < 6; i++)
   {
@@ -649,7 +647,7 @@ void setup()
     delay(150);
   }
 
-  //ReadJumperPins();
+  ReadJumperPins();
 
   //Disable RS485 receiver (debug!)
   PORTB.OUTSET = PIN0_bm;
@@ -764,21 +762,12 @@ void extractLowWord(double *value, const uint8_t index)
 }
 */
 
-/*
 //Modbus command 2 Read Discrete Inputs
-uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity)
+//This assumes the byte array pointed to by *frame has been
+//zeroed by the caller
+uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity, uint8_t *frame)
 {
-  uint8_t ptr = 3;
-
-  //Safety check
-  if (quantity > 16)
-  {
-    //Set highest bit to indicate error
-    sendbuff[1] = sendbuff[1] | B10000000;
-    //Illegal Data Address
-    sendbuff[2] = 0x02;
-    return 3;
-  }
+  uint8_t ptr = 0;
 
   uint16_t config = i2c_readword(INA_REGISTER::CONFIG);
   uint16_t adc_config = i2c_readword(INA_REGISTER::ADC_CONFIG);
@@ -882,7 +871,8 @@ uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity)
 
     if (outcome)
     {
-      sendbuff[ptr] = sendbuff[ptr] | (1 << bitPosition);
+      //Set the bit if needed
+      frame[ptr] = frame[ptr] | (1 << bitPosition);
     }
 
     bitPosition++;
@@ -893,9 +883,9 @@ uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity)
     }
   }
 
-  return ptr;
+  //Return number of bytes we have populated
+  return 1+ptr;
 }
-*/
 
 uint16_t ReadHoldingRegister(uint16_t address)
 {
@@ -1023,10 +1013,9 @@ uint16_t ReadHoldingRegister(uint16_t address)
     break;
   }
 
-    
   case 14:
-  {    
-    copy_current_lsb.dblvalue=CURRENT_LSB;
+  {
+    copy_current_lsb.dblvalue = CURRENT_LSB;
     return copy_current_lsb.word[0];
     break;
   }
@@ -1038,7 +1027,7 @@ uint16_t ReadHoldingRegister(uint16_t address)
   }
   case 16:
   {
-    copy_shunt_resistance.dblvalue=RSHUNT;
+    copy_shunt_resistance.dblvalue = RSHUNT;
     return copy_shunt_resistance.word[0];
     break;
   }

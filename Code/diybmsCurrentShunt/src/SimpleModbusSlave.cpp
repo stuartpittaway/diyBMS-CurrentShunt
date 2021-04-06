@@ -7,20 +7,20 @@
 
 // frame[] is used to recieve and transmit packages.
 
-unsigned char frame[BUFFER_SIZE];
-unsigned int holdingRegsSize; // size of the register array
+uint8_t frame[BUFFER_SIZE];
+uint16_t holdingRegsSize; // size of the register array
 
-unsigned char broadcastFlag;
+uint8_t broadcastFlag;
 
-unsigned char function;
-unsigned int errorCount;
-unsigned int T1_5; // inter character time out
-unsigned int T3_5; // frame delay
+uint8_t function;
+uint16_t errorCount;
+uint16_t T1_5; // inter character time out
+uint16_t T3_5; // frame delay
 UartClass *ModbusPort;
 
 // function definitions
 void exceptionResponse(unsigned char exception);
-unsigned int calculateCRC(unsigned char bufferSize);
+uint16_t calculateCRC(unsigned char bufferSize);
 void sendPacket(unsigned char bufferSize);
 
 void modbus_configure(UartClass *SerialPort,
@@ -102,15 +102,43 @@ unsigned int modbus_update()
 				if (calculateCRC(buffer - 2) == crc)							   // if the calculated crc matches the recieved crc continue
 				{
 					function = frame[1];
-					unsigned int startingAddress = ((frame[2] << 8) | frame[3]); // combine the starting address bytes
-					unsigned int no_of_registers = ((frame[4] << 8) | frame[5]); // combine the number of register bytes
-					unsigned int maxData = startingAddress + no_of_registers;
-					unsigned char index;
-					unsigned char address;
-					unsigned int crc16;
+					uint16_t startingAddress = ((frame[2] << 8) | frame[3]); // combine the starting address bytes
+					uint16_t no_of_registers = ((frame[4] << 8) | frame[5]); // combine the number of register bytes
+					uint16_t maxData = startingAddress + no_of_registers;
+					uint8_t index;
+					uint8_t address;
+					uint16_t crc16;
 
-					// broadcasting is not supported for function 3
-					if (!broadcastFlag && (function == 3))
+					//Clear output buffer
+					memset(frame, 0, sizeof(frame));
+
+					// broadcasting is not supported for function 2
+					if (!broadcastFlag && (function == 2))
+					{
+						if (startingAddress <= 15 && (startingAddress+no_of_registers) <= 15) // check exception 2 ILLEGAL DATA ADDRESS
+						{
+							if ((maxData / 8) <= holdingRegsSize) // check exception 3 ILLEGAL DATA VALUE
+							{
+								uint8_t noOfBytes = ReadDiscreteInputs(startingAddress, no_of_registers, &frame[3]);
+								uint8_t responseFrameSize = 5 + noOfBytes;
+								frame[0] = ModbusSlaveAddress;
+								frame[1] = function;
+								frame[2] = noOfBytes;
+
+								crc16 = calculateCRC(responseFrameSize - 2);
+								frame[responseFrameSize - 2] = crc16 >> 8; // split crc into 2 bytes
+								frame[responseFrameSize - 1] = crc16 & 0xFF;
+								sendPacket(responseFrameSize);
+							}
+							else
+								exceptionResponse(3); // exception 3 ILLEGAL DATA VALUE
+						}
+						else
+							exceptionResponse(2); // exception 2 ILLEGAL DATA ADDRESS
+					}
+					else
+						// broadcasting is not supported for function 3
+						if (!broadcastFlag && (function == 3))
 					{
 						if (startingAddress < holdingRegsSize) // check exception 2 ILLEGAL DATA ADDRESS
 						{
