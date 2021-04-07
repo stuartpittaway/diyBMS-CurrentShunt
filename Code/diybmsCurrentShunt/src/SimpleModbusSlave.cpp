@@ -100,6 +100,8 @@ unsigned int modbus_update()
 
 				if (calculateCRC(buffer - 2) == crc) // if the calculated crc matches the recieved crc continue
 				{
+					GreenLED(true);
+
 					function = frame[1];
 					uint16_t startingAddress = ((frame[2] << 8) | frame[3]); // combine the starting address bytes
 					uint16_t no_of_registers = ((frame[4] << 8) | frame[5]); // combine the number of register bytes
@@ -237,26 +239,44 @@ unsigned int modbus_update()
 									// a function 16 response is an echo of the first 6 bytes from
 									// the request + 2 crc bytes
 									if (!broadcastFlag) // don't respond if it's a broadcast message
+									{
 										sendPacket(8);
+									}
 								}
 								else
-									exceptionResponse(3); // exception 3 ILLEGAL DATA VALUE
+								{
+									// exception 3 ILLEGAL DATA VALUE
+									exceptionResponse(3);
+								}
 							}
 							else
+							{
 								exceptionResponse(2); // exception 2 ILLEGAL DATA ADDRESS
+							}
 						}
 						else
+						{
 							errorCount++; // corrupted packet
+						}
 					}
 					else
+					{
 						exceptionResponse(1); // exception 1 ILLEGAL FUNCTION
+					}
 				}
-				else // checksum failed
+				else
+				{
+					// checksum failed
 					errorCount++;
+				}
+
+				GreenLED(false);
 			} // incorrect id
 		}
 		else if (buffer > 0 && buffer < 8)
+		{
 			errorCount++; // corrupted packet
+		}
 	}
 	return errorCount;
 }
