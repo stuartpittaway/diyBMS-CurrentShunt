@@ -836,15 +836,15 @@ Wire Wire Line
 $Comp
 L power:+5V #PWR0102
 U 1 1 603FB280
-P 4105 5890
-F 0 "#PWR0102" H 4105 5740 50  0001 C CNN
-F 1 "+5V" H 4120 6063 50  0000 C CNN
-F 2 "" H 4105 5890 50  0001 C CNN
-F 3 "" H 4105 5890 50  0001 C CNN
-	1    4105 5890
+P 4125 6075
+F 0 "#PWR0102" H 4125 5925 50  0001 C CNN
+F 1 "+5V" H 4140 6248 50  0000 C CNN
+F 2 "" H 4125 6075 50  0001 C CNN
+F 3 "" H 4125 6075 50  0001 C CNN
+	1    4125 6075
 	1    0    0    -1  
 $EndComp
-Text GLabel 4770 5990 2    59   Input ~ 0
+Text GLabel 4790 6175 2    59   Input ~ 0
 RESET
 Text GLabel 2825 4535 2    59   Input ~ 0
 RESET
@@ -1175,39 +1175,39 @@ Wire Wire Line
 	2020 5685 2020 5635
 Text GLabel 2620 4935 2    59   Input ~ 0
 PA4
-Text GLabel 4105 6990 2    59   Input ~ 0
+Text GLabel 5535 6700 0    59   Input ~ 0
 PA4
 $Comp
-L Connector:Conn_01x12_Male J3
+L Connector:Conn_01x08_Male J3
 U 1 1 604C0657
-P 3905 6390
-F 0 "J3" H 3790 6700 50  0000 C CNN
-F 1 "Debug/UPDI" V 3755 6230 50  0000 C CNN
-F 2 "Connector_PinHeader_2.54mm:PinHeader_1x12_P2.54mm_Vertical" H 3905 6390 50  0001 C CNN
-F 3 "~" H 3905 6390 50  0001 C CNN
-F 4 "C50981" H 3905 6390 50  0001 C CNN "LCSCStockCode"
-F 5 "" H 3905 6390 50  0001 C CNN "PartNumber"
-	1    3905 6390
+P 3925 6375
+F 0 "J3" H 4100 5825 50  0000 C CNN
+F 1 "Debug/UPDI" V 3795 6350 50  0000 C CNN
+F 2 "Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical" H 3925 6375 50  0001 C CNN
+F 3 "~" H 3925 6375 50  0001 C CNN
+F 4 "" H 3925 6375 50  0001 C CNN "LCSCStockCode"
+F 5 "" H 3925 6375 50  0001 C CNN "PartNumber"
+	1    3925 6375
 	1    0    0    -1  
 $EndComp
-Text GLabel 4105 6390 2    59   Input ~ 0
+Text GLabel 4125 6575 2    59   Input ~ 0
 TXD
-Text GLabel 4105 6490 2    59   Input ~ 0
+Text GLabel 4125 6675 2    59   Input ~ 0
 RXD
 $Comp
 L power:GND #PWR026
 U 1 1 604C270C
-P 4450 6090
-F 0 "#PWR026" H 4450 5840 50  0001 C CNN
-F 1 "GND" H 4455 5917 50  0000 C CNN
-F 2 "" H 4450 6090 50  0001 C CNN
-F 3 "" H 4450 6090 50  0001 C CNN
-	1    4450 6090
+P 4470 6275
+F 0 "#PWR026" H 4470 6025 50  0001 C CNN
+F 1 "GND" H 4475 6102 50  0000 C CNN
+F 2 "" H 4470 6275 50  0001 C CNN
+F 3 "" H 4470 6275 50  0001 C CNN
+	1    4470 6275
 	1    0    0    -1  
 $EndComp
-Text GLabel 4105 6190 2    59   Input ~ 0
+Text GLabel 4125 6375 2    59   Input ~ 0
 SCL
-Text GLabel 4105 6290 2    59   Input ~ 0
+Text GLabel 4125 6475 2    59   Input ~ 0
 SDA
 Text Notes 7400 4235 0    118  ~ 0
 RS485 Isolation
@@ -1217,8 +1217,6 @@ Text Notes 865  3720 0    118  ~ 0
 ATTINY1614
 Text Notes 4540 4275 0    118  ~ 0
 RELAY OUTPUT
-Wire Wire Line
-	4105 6090 4370 6090
 Wire Notes Line
 	11115 3785 5610 3785
 Wire Notes Line
@@ -1227,43 +1225,31 @@ Wire Notes Line
 	6960 3880 6970 3880
 Wire Notes Line
 	6970 3880 6970 6430
-Text Notes 4350 7015 0    50   ~ 0
+Text Notes 5130 6895 0    50   ~ 0
 Modbus Address
-Text Notes 4450 6870 0    50   ~ 0
+Text Notes 5150 6510 0    50   ~ 0
 Baud Rate
-Text GLabel 4105 6790 2    59   Input ~ 0
+Text GLabel 5535 6600 0    59   Input ~ 0
 PA3
-Text Notes 3920 6090 1    50   ~ 0
+Text Notes 3925 6265 1    50   ~ 0
 UPDI
-Wire Wire Line
-	4105 6690 4370 6690
-Wire Wire Line
-	4370 6690 4370 6090
-Connection ~ 4370 6090
-Wire Wire Line
-	4370 6090 4450 6090
-Wire Wire Line
-	4105 6890 4370 6890
-Wire Wire Line
-	4370 6890 4370 6690
-Connection ~ 4370 6690
-Text GLabel 4105 6590 2    59   Input ~ 0
+Text GLabel 4125 6775 2    59   Input ~ 0
 PA5
 $Comp
 L Device:R R16
 U 1 1 603AA795
-P 4620 5990
-F 0 "R16" H 4425 5995 50  0000 L CNN
-F 1 "470R" H 4375 5930 50  0000 L CNN
-F 2 "Resistor_SMD:R_0805_2012Metric" V 4550 5990 50  0001 C CNN
-F 3 "~" H 4620 5990 50  0001 C CNN
-F 4 "C17710" H 4620 5990 50  0001 C CNN "LCSCStockCode"
-F 5 "0805W8F4700T5E" H 4620 5990 50  0001 C CNN "PartNumber"
-	1    4620 5990
+P 4640 6175
+F 0 "R16" H 4445 6180 50  0000 L CNN
+F 1 "470R" H 4395 6115 50  0000 L CNN
+F 2 "Resistor_SMD:R_0805_2012Metric" V 4570 6175 50  0001 C CNN
+F 3 "~" H 4640 6175 50  0001 C CNN
+F 4 "C17710" H 4640 6175 50  0001 C CNN "LCSCStockCode"
+F 5 "0805W8F4700T5E" H 4640 6175 50  0001 C CNN "PartNumber"
+	1    4640 6175
 	0    -1   -1   0   
 $EndComp
 Wire Wire Line
-	4105 5990 4470 5990
+	4125 6175 4490 6175
 Text Notes 5940 2425 0    47   ~ 0
 Note 100V caps on input
 Text GLabel 9370 4985 2    50   Input ~ 0
@@ -1311,4 +1297,34 @@ Wire Wire Line
 Connection ~ 6820 1400
 Text GLabel 6820 1200 2    59   Input ~ 0
 BUSVOLTAGE
+$Comp
+L Switch:SW_DIP_x02 SW1
+U 1 1 60702D2D
+P 5835 6700
+F 0 "SW1" H 5835 7067 50  0000 C CNN
+F 1 "SW_DIP_x02" H 5835 6976 50  0000 C CNN
+F 2 "CurrentShuntCircuit:XKBConnectivity_DSHP02TS-S_P1.27" H 5835 6700 50  0001 C CNN
+F 3 "https://datasheet.lcsc.com/szlcsc/2002271742_XKB-Connectivity-DSHP02TS-S_C319052.pdf" H 5835 6700 50  0001 C CNN
+F 4 "C319052" H 5835 6700 50  0001 C CNN "LCSCStockCode"
+	1    5835 6700
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR0103
+U 1 1 6070355F
+P 6235 6700
+F 0 "#PWR0103" H 6235 6450 50  0001 C CNN
+F 1 "GND" H 6240 6527 50  0000 C CNN
+F 2 "" H 6235 6700 50  0001 C CNN
+F 3 "" H 6235 6700 50  0001 C CNN
+	1    6235 6700
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	6135 6600 6135 6700
+Wire Wire Line
+	6135 6700 6235 6700
+Connection ~ 6135 6700
+Wire Wire Line
+	4125 6275 4470 6275
 $EndSCHEMATC
