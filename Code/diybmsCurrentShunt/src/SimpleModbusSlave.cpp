@@ -87,7 +87,7 @@ unsigned int modbus_update()
 		// The minimum request packet is 8 bytes for function 3 & 16
 		if (buffer > 7)
 		{
-			unsigned char id = frame[0];
+			uint8_t id = frame[0];
 
 			broadcastFlag = false;
 
@@ -96,7 +96,7 @@ unsigned int modbus_update()
 
 			if (id == ModbusSlaveAddress || broadcastFlag) // if the recieved ID matches the slaveID or broadcasting id (0), continue
 			{
-				unsigned int crc = ((frame[buffer - 2] << 8) | frame[buffer - 1]); // combine the crc Low & High bytes
+				uint16_t crc = ((frame[buffer - 2] << 8) | frame[buffer - 1]); // combine the crc Low & High bytes
 
 				if (calculateCRC(buffer - 2) == crc) // if the calculated crc matches the recieved crc continue
 				{
