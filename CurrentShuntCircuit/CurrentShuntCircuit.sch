@@ -1303,9 +1303,9 @@ U 1 1 60702D2D
 P 5835 6700
 F 0 "SW1" H 5835 7067 50  0000 C CNN
 F 1 "SW_DIP_x02" H 5835 6976 50  0000 C CNN
-F 2 "CurrentShuntCircuit:XKBConnectivity_DSHP02TS-S_P1.27" H 5835 6700 50  0001 C CNN
-F 3 "https://datasheet.lcsc.com/szlcsc/2002271742_XKB-Connectivity-DSHP02TS-S_C319052.pdf" H 5835 6700 50  0001 C CNN
-F 4 "C319052" H 5835 6700 50  0001 C CNN "LCSCStockCode"
+F 2 "Button_Switch_THT:SW_DIP_SPSTx02_Slide_6.7x6.64mm_W7.62mm_P2.54mm_LowProfile" H 5835 6700 50  0001 C CNN
+F 3 "https://datasheet.lcsc.com/szlcsc/2004251705_Korean-Hroparts-Elec-DS-02BP_C458081.pdf" H 5835 6700 50  0001 C CNN
+F 4 "C458081" H 5835 6700 50  0001 C CNN "LCSCStockCode"
 	1    5835 6700
 	1    0    0    -1  
 $EndComp
