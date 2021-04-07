@@ -28,7 +28,7 @@ Register 15 returns the current relay state, and allows the relay to be manually
 Register 16 always returns zero when read, set to 1 to perform a factory reset on the monitor, returning all values to defaults.
 
 
-# Holding Registers (command 4)
+# Holding Registers (command 3)
 
 Returns 16 bit word value for the following configuration items.  Some items are split over two registers and will need to recombined before use.
 For valid results you must read both registers as part of the same request, otherwise invalid/corrupt data will be returned.
