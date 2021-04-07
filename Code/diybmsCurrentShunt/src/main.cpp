@@ -1294,14 +1294,14 @@ uint16_t ReadHoldingRegister(uint16_t address)
   case 36:
   {
     //COMPILE_DATE_TIME_EPOCH
-    return (uint16_t)COMPILE_DATE_TIME_UTC_EPOCH;
+    uint32_t x = COMPILE_DATE_TIME_UTC_EPOCH >> 16;
+    return (uint16_t)x;
     break;
   }
   case 37:
   {
     //COMPILE_DATE_TIME_EPOCH
-    uint32_t x = COMPILE_DATE_TIME_UTC_EPOCH >> 16;
-    return (uint16_t)x;
+    return (uint16_t)COMPILE_DATE_TIME_UTC_EPOCH;
     break;
   }
   case 38:
