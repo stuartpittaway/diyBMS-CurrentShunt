@@ -2,7 +2,7 @@
 
   (general
     (thickness 1.6)
-    (drawings 67)
+    (drawings 68)
     (tracks 487)
     (zones 0)
     (modules 56)
@@ -2269,6 +2269,9 @@
     )
   )
 
+  (gr_text "100V cap" (at 186.8 102.06) (layer B.SilkS) (tstamp 60702635)
+    (effects (font (size 1 1) (thickness 0.15)) (justify mirror))
+  )
   (gr_text ADDR (at 190.11 122.43 90) (layer F.SilkS) (tstamp 606D9B6E)
     (effects (font (size 1.2 1.2) (thickness 0.15)))
   )
