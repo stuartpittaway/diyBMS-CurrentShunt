@@ -65,8 +65,6 @@ FastCRC16 CRC16;
 #define REDLED_PIN_BITMAP PIN6_bm
 #define RELAY_PIN_BITMAP PIN5_bm
 
-
-
 typedef union
 {
   double dblvalue;
@@ -74,8 +72,12 @@ typedef union
 } DoubleUnionType;
 
 const double full_scale_adc = 40.96;
-const double CoulombsToAmpHours = 0.00027778;
+//const double CoulombsToAmpHours = 1.0 / 3600.0;
+const double CoulombsToMilliAmpHours = 1.0 / 3.6;
 const uint8_t INA228_I2C_Address = B1000000;
+
+double charge_c_in = 0;
+double charge_c_out = 0;
 
 uint16_t ModBusBaudRate = MODBUSDEFAULTBAUDRATE;
 
@@ -122,8 +124,8 @@ struct eeprom_regs
 
 eeprom_regs registers;
 
-double amphour_in = 0;
-double amphour_out = 0;
+//double amphour_in = 0;
+//double amphour_out = 0;
 
 volatile bool ALERT_TRIGGERED = false;
 uint16_t alert = 0;
@@ -459,7 +461,8 @@ bool SetRegister(uint16_t address, uint16_t value)
   {
     //amphour_out
     newvalue.word[1] = value;
-    amphour_out = newvalue.dblvalue;
+    uint32_t x = newvalue.word[0] << 16 | value;
+    charge_c_out = x * CoulombsToMilliAmpHours;
     break;
   }
 
@@ -467,7 +470,8 @@ bool SetRegister(uint16_t address, uint16_t value)
   {
     //amphour_in
     newvalue.word[1] = value;
-    amphour_in = newvalue.dblvalue;
+    uint32_t x = newvalue.word[0] << 16 | value;
+    charge_c_in = x * CoulombsToMilliAmpHours;
     break;
   }
 
@@ -677,7 +681,7 @@ void ConfigureI2C()
 void CalculateLSB()
 {
   //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
-  // Each LSB on the 20 bit ADC (524288 possibl values) is 122.88/524288 = 0.000234375A
+  // Each LSB on the 20 bit ADC (524288 possible values) is 122.88/524288 = 0.000234375A = CURRENT_LSB
   // Resistance (RSHUNT) = 0.00033333333333
 
   // Shunt calibration = 52428800000 * 0.000234375 * 0.00033333333333 = 4095.999999 = 4096
@@ -685,7 +689,7 @@ void CalculateLSB()
   registers.full_scale_current = ((double)registers.shunt_max_current / (double)registers.shunt_millivolt) * full_scale_adc;
   registers.RSHUNT = ((double)registers.shunt_millivolt / 1000.0) / (double)registers.shunt_max_current;
   registers.CURRENT_LSB = registers.full_scale_current / (double)0x80000;
-  registers.R_SHUNT_CAL = 4 * 13107200000 * registers.CURRENT_LSB * registers.RSHUNT;
+  registers.R_SHUNT_CAL = 4L * 13107200000L * registers.CURRENT_LSB * registers.RSHUNT;
 }
 
 void setup()
@@ -820,10 +824,9 @@ double Energy()
 }
 
 // Charge in Coulombs
-double Charge()
+int64_t RawCharge()
 {
-  int64_t charge = i2c_readInt40(INA_REGISTER::CHARGE);
-  return registers.CURRENT_LSB * (int32_t)charge;
+  return i2c_readInt40(INA_REGISTER::CHARGE);
 }
 
 double Power()
@@ -1020,8 +1023,8 @@ uint16_t ReadHoldingRegister(uint16_t address)
   static DoubleUnionType ShuntUnderCurrentLimit;
   static DoubleUnionType PowerLimit;
 
-  static DoubleUnionType copy_amphour_out;
-  static DoubleUnionType copy_amphour_in;
+  static uint32_t milliamphour_out;
+  static uint32_t milliamphour_in;
 
   static DoubleUnionType copy_current_lsb;
   static DoubleUnionType copy_shunt_resistance;
@@ -1060,31 +1063,31 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   case 4:
   {
-    //amphour_out
-    copy_amphour_out.dblvalue = amphour_out;
-    return copy_amphour_out.word[0];
+    //milliamphour_out
+    milliamphour_out = charge_c_out * CoulombsToMilliAmpHours;
+    return (uint16_t)milliamphour_out >> 16;
     break;
   }
 
   case 5:
   {
-    //amphour_out
-    return copy_amphour_out.word[1];
+    //milliamphour_out
+    return (uint16_t)milliamphour_out;
     break;
   }
 
   case 6:
   {
-    //amphour_in
-    copy_amphour_in.dblvalue = amphour_in;
-    return copy_amphour_in.word[0];
+    //milliamphour_in
+    milliamphour_in = charge_c_in * CoulombsToMilliAmpHours;
+    return (uint16_t)milliamphour_in >> 16;
     break;
   }
 
   case 7:
   {
-    //amphour_in
-    return copy_amphour_in.word[1];
+    //milliamphour_in
+    return (uint16_t)milliamphour_in;
     break;
   }
 
@@ -1377,6 +1380,8 @@ uint16_t ReadHoldingRegister(uint16_t address)
   return 0;
 }
 
+double last_charge_coulombs = 0;
+
 void loop()
 {
   wdt_reset();
@@ -1435,33 +1440,52 @@ void loop()
 
     RedLED(true);
 
-    //Do it again in 5 seconds
-    timer = millis() + 5000;
+    //Do it again in 2.5 seconds
+    timer = millis() + 2500;
 
     //double voltage = BusVoltage();
     //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
     //double current = Current();
+
+    //Power is always a positive number
     double power = Power();
     //double temperature = DieTemperature();
     //double shuntv = ShuntVoltage();
     //double energy_joules = Energy();
-    double charge_coulombs = Charge();
+
+    //int64 on an 8 bit micro!
+    int64_t charge_raw = RawCharge();
+
+    double charge_coulombs = registers.CURRENT_LSB * charge_raw;
+
+    double difference = charge_coulombs - last_charge_coulombs;
+
+    //amphour_out = charge_coulombs * CoulombsToAmpHours;
 
     //If we don't have a power reading, ignore the coulombs - also means
     //Ah counting won't work without voltage reading on the INA228 chip
     if (power > 0)
     {
-      if (charge_coulombs > 0)
+      if (difference > 0)
       {
-        amphour_out += charge_coulombs * CoulombsToAmpHours;
+        charge_c_out += difference;
       }
       else
       {
-        amphour_in += charge_coulombs * CoulombsToAmpHours;
+        charge_c_in += difference;
       }
     }
 
-    ResetChargeEnergyRegisters();
+    last_charge_coulombs = charge_coulombs;
+
+    //Periodically we need to reset the energy register to prevent it overflowing
+    //if we do this too frequently we get incorrect readings over the long term
+    //360000 = 100Amp Hour
+    if (last_charge_coulombs > 360000.0)
+    {
+      ResetChargeEnergyRegisters();
+      last_charge_coulombs = 0;
+    }
 
     if (alert == 0)
     {

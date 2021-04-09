@@ -39,10 +39,10 @@ All registers are read only, unless also specified in "Write Registers" later on
 40002|Voltage
 40003|Current (4 byte double)
 40004|Current
-40005|amphour_out (4 byte double)
-40006|amphour_out
-40007|amphour_in (4 byte double)
-40008|amphour_in
+40005|milliamphour_out (4 byte unsigned long uint32_t)
+40006|milliamphour_out
+40007|milliamphour_in (4 byte  unsigned long uint32_t)
+40008|milliamphour_in
 40009|temperature (signed int16)
 40010|Watchdog timer trigger count (like error counter) (unsigned int16)
 40011|Power (4 byte double)
