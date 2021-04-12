@@ -1203,13 +1203,13 @@ uint16_t ReadHoldingRegister(uint16_t address)
   case 24:
   {
     BusUnderVolt.dblvalue = (double)i2c_readword(INA_REGISTER::BUVL) * 0.003125F;
-    return BusOverVolt.word[0];
+    return BusUnderVolt.word[0];
     break;
   }
 
   case 25:
   {
-    return BusOverVolt.word[1];
+    return BusUnderVolt.word[1];
     break;
   }
 
