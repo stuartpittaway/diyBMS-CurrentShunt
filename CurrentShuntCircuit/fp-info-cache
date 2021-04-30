@@ -1,4 +1,4 @@
-18998004818061015
+18998006343641204
 Battery
 BatteryHolder_Bulgin_BX0036_1xC
 Bulgin Battery Holder, BX0036, Battery Type C (https://www.bulgin.com/products/pub/media/bulgin/data/Battery_holders.pdf)
@@ -48797,12 +48797,12 @@ Terminal-Block_3.81_4P_LCSC_C395880
 4
 4
 CurrentShuntCircuit
-diode_symbol
-
-
+XKBConnectivity_DSHP02TS-S_P1.27
+SMD 2x-dip-switch SPST Omron_A6H-2101, Slide, row spacing 6.15 mm (242 mils), body size  (see https://www.omron.com/ecb/products/pdf/en-a6h.pdf)
+SMD DIP Switch SPST Slide 6.15mm 242mil
 0
-0
-0
+4
+4
 CurrentShuntCircuit
 diybms_logo
 
