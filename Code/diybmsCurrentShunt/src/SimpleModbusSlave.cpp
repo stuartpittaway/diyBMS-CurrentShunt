@@ -110,6 +110,7 @@ unsigned int modbus_update()
 					uint8_t address;
 					uint16_t crc16;
 
+					/*
 					// broadcasting is not supported for function 2
 					if (!broadcastFlag && (function == 2))
 					{
@@ -138,8 +139,9 @@ unsigned int modbus_update()
 							exceptionResponse(2); // exception 2 ILLEGAL DATA ADDRESS
 					}
 					else
-						// broadcasting is not supported for function 3
-						if (!broadcastFlag && (function == 3))
+*/
+					// broadcasting is not supported for function 3
+					if (!broadcastFlag && (function == 3))
 					{
 						if (startingAddress < holdingRegsSize) // check exception 2 ILLEGAL DATA ADDRESS
 						{
@@ -224,10 +226,10 @@ unsigned int modbus_update()
 								{
 									address = 7; // start at the 8th byte in the frame
 
-									for (uint8_t index = startingAddress; index < maxData; index++)
+									for (uint16_t index = startingAddress; index < maxData; index++)
 									{
-
-										//regs[index] = ((frame[address] << 8) | frame[address + 1]);
+										uint16_t newValue = ((frame[address] << 8) | frame[address + 1]);
+										SetRegister(index, newValue);
 										address += 2;
 									}
 

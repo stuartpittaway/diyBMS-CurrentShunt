@@ -1,32 +1,3 @@
-# Input Status Registers (command 2, Read Discrete Inputs)
-
-Returns a BIT value (on/off) for the following configuration items:
-
-10001|TMPOL|Read only
-10002|SHNTOL|Read only
-10003|SHNTUL|Read only
-10004|BUSOL|Read only
-10005|BUSUL|Read only
-10006|POL|Read only
-10007|Temperature compensation enabled|Read write
-10008|ADC Range 0=±163.84 mV, 1=±40.96 mV (only 40.96mV supported by diyBMS)|Read only
-10009|Relay Trigger on TMPOL|Read write
-10010|Relay Trigger on SHNTOL|Read write
-10011|Relay Trigger on SHNTUL|Read write
-10012|Relay Trigger on BUSOL|Read write
-10013|Relay Trigger on BUSUL|Read write
-10014|Relay Trigger on POL|Read write
-10015|Existing Relay state (0=off)|Read write
-10016|Factory reset bit (always 0 when read)|Read write
-
-Registers 1 to 6 indicate the current alert state of the INA228 chip, zero means not alerted.  The RED LED will light when any of the alert states are non-zero.
-
-Registers 9 to 14 control which alerts will trigger the relay to turn on.  Value of 1 means the alert is active/enabled.
-
-Register 15 returns the current relay state, and allows the relay to be manually controlled
-
-Register 16 always returns zero when read, set to 1 to perform a factory reset on the monitor, returning all values to defaults.
-
 
 # Holding Registers (command 3)
 
@@ -44,7 +15,7 @@ All registers are read only, unless also specified in "Write Registers" later on
 40007|milliamphour_in (4 byte  unsigned long uint32_t)
 40008|milliamphour_in
 40009|temperature (signed int16)
-40010|Watchdog timer trigger count (like error counter) (unsigned int16)
+40010|Various status flags (see below)
 40011|Power (4 byte double)
 40012|Power
 40013|Shunt mV (4 byte double)
@@ -73,7 +44,7 @@ All registers are read only, unless also specified in "Write Registers" later on
 40036|GITHUB version
 40037|COMPILE_DATE_TIME_EPOCH
 40038|COMPILE_DATE_TIME_EPOCH
-40039|Spare (not used)
+40039|Watchdog timer trigger count (like error counter)
 40040|DEBUG CONFIG
 40041|DEBUG ADC_CONFIG
 40042|DEBUG SHUNT_CAL
@@ -107,3 +78,32 @@ All registers are read only, unless also specified in "Write Registers" later on
 
 ** For normal configuration, just set the shunt maximum current and millivolt registers.  Shunt_Cal is calculated as needed based on those values.  For fine tuning calibration, the SHUNT_CAL register can be written to/adjusted.  Once a register is set, it is stored in EEPROM and used when shunt is powered up.
 
+
+# Bit values for Register 40010 (status flags)
+
+Returns a BIT value (on/off) for the following configuration items:
+
+16|TMPOL|Read only
+15|SHNTOL|Read only
+14|SHNTUL|Read only
+13|BUSOL|Read only
+12|BUSUL|Read only
+11|POL|Read only
+10|Temperature compensation enabled|Read write
+9|ADC Range 0=±163.84 mV, 1=±40.96 mV (only 40.96mV supported by diyBMS)|Read only
+8|Relay Trigger on TMPOL|Read write
+7|Relay Trigger on SHNTOL|Read write
+6|Relay Trigger on SHNTUL|Read write
+5|Relay Trigger on BUSOL|Read write
+4|Relay Trigger on BUSUL|Read write
+3|Relay Trigger on POL|Read write
+2|Existing Relay state (0=off)|Read write
+1|Factory reset bit (always 0 when read)|Read write
+
+Registers 1 to 6 indicate the current alert state of the INA228 chip, zero means not alerted.  The RED LED will light when any of the alert states are non-zero.
+
+Registers 9 to 14 control which alerts will trigger the relay to turn on.  Value of 1 means the alert is active/enabled.
+
+Register 15 returns the current relay state (and allows the relay to be manually controlled - TBC)
+
+Register 16 always returns zero when read (set to 1 to perform a factory reset on the monitor, returning all values to defaults - TBC)

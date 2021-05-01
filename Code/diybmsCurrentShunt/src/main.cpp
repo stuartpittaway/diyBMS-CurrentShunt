@@ -879,134 +879,40 @@ ISR(PORTB_PORT_vect)
   }
 }
 
-//Modbus command 2 Read Discrete Inputs
-//This assumes the byte array pointed to by *frame has been
-//zeroed by the caller
-uint8_t ReadDiscreteInputs(uint16_t address, uint16_t quantity, uint8_t *frame)
+uint16_t bitFlags()
 {
-  uint8_t ptr = 0;
-
   uint16_t config = i2c_readword(INA_REGISTER::CONFIG);
-  uint16_t adc_config = i2c_readword(INA_REGISTER::ADC_CONFIG);
 
-  uint8_t bitPosition = 0;
-  for (size_t i = address; i < address + quantity; i++)
+  //B11111100
+  const uint8_t filter = (bit(DIAG_ALRT_FIELD::TMPOL) | bit(DIAG_ALRT_FIELD::SHNTOL) | bit(DIAG_ALRT_FIELD::SHNTUL) | bit(DIAG_ALRT_FIELD::BUSOL) | bit(DIAG_ALRT_FIELD::BUSUL) | bit(DIAG_ALRT_FIELD::POL));
+
+  uint16_t flag1 = diag_alrt_value & filter;
+
+  if (config & bit(5))
   {
-    bool outcome = false;
-    switch (i)
-    {
-
-    case 0:
-    {
-      outcome = diag_alrt_value & bit(DIAG_ALRT_FIELD::TMPOL);
-      break;
-    }
-    case 1:
-    {
-      outcome = diag_alrt_value & bit(DIAG_ALRT_FIELD::SHNTOL);
-      break;
-    }
-    case 2:
-    {
-      outcome = diag_alrt_value & bit(DIAG_ALRT_FIELD::SHNTUL);
-      break;
-    }
-    case 3:
-    {
-      outcome = diag_alrt_value & bit(DIAG_ALRT_FIELD::BUSOL);
-      break;
-    }
-    case 4:
-    {
-      outcome = diag_alrt_value & bit(DIAG_ALRT_FIELD::BUSUL);
-      break;
-    }
-    case 5:
-    {
-      //Power over limit
-      outcome = diag_alrt_value & bit(DIAG_ALRT_FIELD::POL);
-      break;
-    }
-    case 6:
-    {
-      //Temperature compensation
-      outcome = config & bit(5);
-      break;
-    }
-
-    case 7:
-    {
-      //ADC Range
-      //0h = ±163.84 mV, 1h = ± 40.96 mV
-      outcome = config & bit(4);
-      break;
-    }
-
-      //Output bits for relay_trigger_bitmap
-    case 8:
-    {
-      outcome = registers.relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::TMPOL);
-      break;
-    }
-    case 9:
-    {
-      outcome = registers.relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::SHNTOL);
-      break;
-    }
-    case 10:
-    {
-      outcome = registers.relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::SHNTUL);
-      break;
-    }
-    case 11:
-    {
-      outcome = registers.relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::BUSOL);
-      break;
-    }
-    case 12:
-    {
-      outcome = registers.relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::BUSUL);
-      break;
-    }
-    case 13:
-    {
-      outcome = registers.relay_trigger_bitmap & bit(DIAG_ALRT_FIELD::POL);
-      break;
-    }
-
-    case 14:
-    {
-      outcome = relay_state;
-      break;
-    }
-    case 15:
-    {
-      //Factory reset - always FALSE
-      break;
-    }
-
-    default:
-    {
-      break;
-    }
-    }
-
-    if (outcome)
-    {
-      //Set the bit if needed
-      frame[ptr] = frame[ptr] | (1 << bitPosition);
-    }
-
-    bitPosition++;
-    if (bitPosition == 8)
-    {
-      bitPosition = 0;
-      ptr++;
-    }
+    //Temperature compensation
+    flag1 = flag1 | B00000001;
   }
 
-  //Return number of bytes we have populated
-  return 1 + ptr;
+  if (config & bit(4))
+  {
+    //ADC Range
+    //0h = ±163.84 mV, 1h = ± 40.96 mV
+    flag1 = flag1 | B00000010;
+  }
+
+  uint16_t flag2 = registers.relay_trigger_bitmap & filter;
+
+  //Relaystate (bit 1)
+  if (relay_state)
+  {
+    flag2 = flag2 | B00000001;
+  }
+
+  //Bit 2 is spare
+  flag2 = flag2 | B00000010;
+
+  return (flag1 << 8) | flag2;
 }
 
 uint16_t ReadHoldingRegister(uint16_t address)
@@ -1100,8 +1006,8 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   case 9:
   {
-    //Watchdog timer trigger count (like error counter)
-    return wdt_triggered_count;
+    //Various flags
+    return bitFlags();
     break;
   }
 
@@ -1309,13 +1215,14 @@ uint16_t ReadHoldingRegister(uint16_t address)
   }
   case 38:
   {
-    //Spare
-    return 0x7890;
+    //Watchdog timer trigger count (like error counter)
+    return wdt_triggered_count;
     break;
   }
 
   case 39:
   {
+    //40040
     return i2c_readword(INA_REGISTER::CONFIG);
     break;
   }
