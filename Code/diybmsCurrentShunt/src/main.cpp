@@ -83,13 +83,12 @@ uint16_t ModBusBaudRate = MODBUSDEFAULTBAUDRATE;
 
 uint8_t ModbusSlaveAddress = MODBUSBASEADDRESS;
 
-bool relay_state = false;
+volatile bool relay_state = false;
+volatile bool config_dirty = false;
 
 unsigned long timer = 0;
 
 #define combineBytes(high, low) (high << 8) + low
-
-const uint16_t R_CONFIG = _BV(4); // ADCRANGE = 40.96mV scale
 
 // This structure is held in EEPROM, it has the same register/values
 // as the INA228 chip and is used to set the INA228 chip to the correct parameters on power up
@@ -99,6 +98,7 @@ const uint16_t R_CONFIG = _BV(4); // ADCRANGE = 40.96mV scale
 // to configure to our prescribed needs.
 struct eeprom_regs
 {
+  uint16_t R_CONFIG;
   uint16_t R_ADC_CONFIG;
   uint16_t R_SHUNT_CAL;    //Shunt Calibration
   uint16_t R_SHUNT_TEMPCO; //Shunt Temperature Coefficient
@@ -407,7 +407,7 @@ void ResetChargeEnergyRegisters()
   //0h = Normal Operation
   //1h = Clears registers to default values for ENERGY and CHARGE registers
 
-  if (!i2c_writeword(INA_REGISTER::CONFIG, R_CONFIG | 0x1000))
+  if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG | 0x1000))
   {
     i2c_error();
   }
@@ -415,9 +415,23 @@ void ResetChargeEnergyRegisters()
 
 volatile uint16_t diag_alrt_value = 0;
 
+void SetINA228ConfigurationRegisters()
+{
+  uint8_t result = 0;
+
+  result += i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG);
+  result += i2c_writeword(INA_REGISTER::ADC_CONFIG, registers.R_ADC_CONFIG);
+
+  if (result != 2)
+  {
+    i2c_error();
+  }
+}
+
 void SetINA228Registers()
 {
   uint8_t result = 0;
+
   result += i2c_writeword(INA_REGISTER::SHUNT_CAL, registers.R_SHUNT_CAL);
   result += i2c_writeword(INA_REGISTER::SHUNT_TEMPCO, registers.R_SHUNT_TEMPCO);
   result += i2c_writeword(INA_REGISTER::SOVL, registers.R_SOVL);
@@ -477,8 +491,48 @@ bool SetRegister(uint16_t address, uint16_t value)
 
   case 9:
   {
-    //Watchdog timer trigger count (like error counter)
-    wdt_triggered_count = value;
+    // Bit flags
+    // value
+    uint8_t flag1 = value >> 8;
+    uint8_t flag2 = value;
+
+    //Flag1 holds only 2 useful bits when setting
+    //TempCompEnabled
+    if ((flag1 & B00000010) != 0)
+    {
+      //Set bit
+      registers.R_CONFIG |= bit(5);
+    }
+    else
+    {
+      //Clear bit
+      registers.R_CONFIG &= ~bit(5);
+    }
+
+    //ADCRange = 40.96 or 163.84 ?;
+    if ((flag1 & B00000001) != 0)
+    {
+      //1h = ± 40.96 mV
+      registers.R_CONFIG |= bit(4);
+    }
+    else
+    {
+      //0h = ±163.84 mV
+      registers.R_CONFIG &= ~bit(4);
+    }
+
+    //Flag2 bitmask can be applied directly to trigger_bitmap
+    registers.relay_trigger_bitmap = flag2 & ALL_ALERT_BITS;
+
+    //TODO: Process RelayState
+    //flag2 & B00000010;
+
+    //TODO: Process Factory Reset
+    //flag2 & B00000001;
+
+    //Set CONFIG and ADC_CONFIG
+    SetINA228ConfigurationRegisters();
+
     break;
   }
 
@@ -561,6 +615,13 @@ bool SetRegister(uint16_t address, uint16_t value)
     break;
   }
 
+  case 38:
+  {
+    //Watchdog timer trigger count (like error counter)
+    wdt_triggered_count = value;
+    break;
+  }
+
   default:
   {
     return false;
@@ -568,8 +629,12 @@ bool SetRegister(uint16_t address, uint16_t value)
   }
   }
 
-  SaveConfig();
   SetINA228Registers();
+
+  //Rather than writing to EEPROM on every register change (there could be several)
+  //mark the configuration as "dirty" and the loop() will write the config to EEPROM
+  //in a few seconds time
+  config_dirty = true;
 
   return true;
 }
@@ -611,7 +676,7 @@ void ConfigureI2C()
   }
 
   // Configure our registers (after reset)
-  if (!i2c_writeword(INA_REGISTER::CONFIG, R_CONFIG))
+  if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG))
   {
     i2c_error();
   }
@@ -737,6 +802,8 @@ void setup()
     // B1111 110 110 100 101
     //                   AVG
     registers.R_ADC_CONFIG = 0xFDA5;
+
+    registers.R_CONFIG = _BV(4); // ADCRANGE = 40.96mV scale
 
     //Default 150A shunt @ 50mV scale
     registers.R_SHUNT_CAL = 0x1000;
@@ -883,34 +950,31 @@ uint16_t bitFlags()
 {
   uint16_t config = i2c_readword(INA_REGISTER::CONFIG);
 
-  //B11111100
-  const uint8_t filter = (bit(DIAG_ALRT_FIELD::TMPOL) | bit(DIAG_ALRT_FIELD::SHNTOL) | bit(DIAG_ALRT_FIELD::SHNTUL) | bit(DIAG_ALRT_FIELD::BUSOL) | bit(DIAG_ALRT_FIELD::BUSUL) | bit(DIAG_ALRT_FIELD::POL));
-
-  uint16_t flag1 = diag_alrt_value & filter;
+  uint16_t flag1 = diag_alrt_value & ALL_ALERT_BITS;
 
   if (config & bit(5))
   {
     //Temperature compensation
-    flag1 = flag1 | B00000001;
+    flag1 = flag1 | B00000010;
   }
 
   if (config & bit(4))
   {
     //ADC Range
     //0h = ±163.84 mV, 1h = ± 40.96 mV
-    flag1 = flag1 | B00000010;
+    flag1 = flag1 | B00000001;
   }
 
-  uint16_t flag2 = registers.relay_trigger_bitmap & filter;
+  uint16_t flag2 = registers.relay_trigger_bitmap & ALL_ALERT_BITS;
 
-  //Relaystate (bit 1)
+  //Relaystate (bit 2)
   if (relay_state)
   {
-    flag2 = flag2 | B00000001;
+    flag2 = flag2 | B00000010;
   }
 
-  //Bit 2 is spare
-  flag2 = flag2 | B00000010;
+  //Bit 1 is factory reset - always 0 when read
+  flag2 = flag2 & B11111110;
 
   return (flag1 << 8) | flag2;
 }
@@ -1344,6 +1408,12 @@ void loop()
 
   if (millis() > timer)
   {
+
+    if (config_dirty)
+    {
+      SaveConfig();
+      config_dirty = false;
+    }
 
     RedLED(true);
 

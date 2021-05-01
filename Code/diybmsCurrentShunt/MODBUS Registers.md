@@ -83,6 +83,7 @@ All registers are read only, unless also specified in "Write Registers" later on
 
 Returns a BIT value (on/off) for the following configuration items:
 
+(First byte)
 16|TMPOL|Read only
 15|SHNTOL|Read only
 14|SHNTUL|Read only
@@ -91,6 +92,8 @@ Returns a BIT value (on/off) for the following configuration items:
 11|POL|Read only
 10|Temperature compensation enabled|Read write
 9|ADC Range 0=±163.84 mV, 1=±40.96 mV (only 40.96mV supported by diyBMS)|Read only
+
+(Second byte)
 8|Relay Trigger on TMPOL|Read write
 7|Relay Trigger on SHNTOL|Read write
 6|Relay Trigger on SHNTUL|Read write
