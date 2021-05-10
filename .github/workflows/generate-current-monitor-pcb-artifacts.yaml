@@ -64,7 +64,7 @@ jobs:
       run: |
         cd CurrentShuntCircuit
         rm -rf export/
-        kibot -c ../../../config-2layer.kibot.yaml -e CurrentShuntCircuit.sch -b CurrentShuntCircuit.kicad_pcb -d export
+        kibot -c ../config-2layer.kibot.yaml -e CurrentShuntCircuit.sch -b CurrentShuntCircuit.kicad_pcb -d export
 
     # Splitting this out to ensure a failed kibot run will mark a check as failed.
     - name: Prepare Gerbers artifact
