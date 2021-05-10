@@ -2,7 +2,7 @@
 
   (general
     (thickness 1.6)
-    (drawings 68)
+    (drawings 69)
     (tracks 487)
     (zones 0)
     (modules 56)
@@ -2269,6 +2269,9 @@
     )
   )
 
+  (gr_text <<hash>> (at 146.4 128.4) (layer F.SilkS) (tstamp 60996A52)
+    (effects (font (size 1.1 1.1) (thickness 0.15)) (justify left))
+  )
   (gr_text "100V cap" (at 186.8 102.06) (layer B.SilkS) (tstamp 60702635)
     (effects (font (size 1 1) (thickness 0.15)) (justify mirror))
   )
@@ -2357,7 +2360,7 @@
   (gr_text "85V MAX" (at 205.31 126.33) (layer F.SilkS) (tstamp 60379DA0)
     (effects (font (size 1.2 1.2) (thickness 0.2)))
   )
-  (gr_text "diyBMS - Current & Voltage Monitor" (at 185.7 60.25) (layer F.SilkS) (tstamp 60379BF2)
+  (gr_text "diyBMS - Current & Voltage Monitor" (at 185.7 62) (layer F.SilkS) (tstamp 60379BF2)
     (effects (font (size 2 2) (thickness 0.3)))
   )
   (gr_arc (start 141 129) (end 140 129) (angle -90) (layer Edge.Cuts) (width 0.05) (tstamp 603773AE))
