@@ -2,7 +2,7 @@
 
   (general
     (thickness 1.6)
-    (drawings 69)
+    (drawings 68)
     (tracks 487)
     (zones 0)
     (modules 56)
@@ -2308,9 +2308,6 @@
   )
   (gr_text "The INA228-Q1 is an ultra-precise \ndigital power monitor with 20-bit \ndelta-sigma ADC specifically\ndesigned for current-sensing \napplications. The device can \nmeasure a full-scale differential \ninput of ±163.84 mV or ±40.96 mV \nacross a resistive shunt sense\nelement with common-mode \nvoltage support from –0.3 V to +85 V." (at 160.93 75.03) (layer B.SilkS) (tstamp 60363CEF)
     (effects (font (size 1.2 1.2) (thickness 0.2)) (justify mirror))
-  )
-  (gr_text "7 Apr 2021" (at 217.77 100.24) (layer F.SilkS) (tstamp 60363A91)
-    (effects (font (size 1.2 1.2) (thickness 0.2)))
   )
   (gr_text JLCJLCJLCJLC (at 229.12 72.42 90) (layer F.SilkS)
     (effects (font (size 1 1) (thickness 0.1)))
