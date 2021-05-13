@@ -65,6 +65,26 @@ FastCRC16 CRC16;
 #define REDLED_PIN_BITMAP PIN6_bm
 #define RELAY_PIN_BITMAP PIN5_bm
 
+//Sequences used to indicate error on RED led
+//Single flash
+const static uint32_t err_INA228Missing = 0xF0F00000;
+//Two flashes
+const static uint32_t err_InitialConfigure = 0xF0F0F000;
+//3 flashes
+const static uint32_t err_WrongChip = 0xF0F0F0F0;
+//4 flashes (0xCC=2 flashes)
+const static uint32_t err_WriteConfig = 0xF0CCCC00;
+//5 flashes (0xC0=1 short flash)
+const static uint32_t err_WriteADCConfig = 0xF0CCCCC0;
+//6 flashes
+const static uint32_t err_WriteRegisters = 0xF0CCCCCC;
+//7 flashes (0xAA=4 fast flashes)
+const static uint32_t err_INA228Reset = 0xF0AAA800;
+//8 flashes
+const static uint32_t err_CheckSumErr = 0xF0AAAA00;
+//9 flashes
+const static uint32_t err_ResetChargeEnergyRegisters = 0xF0AAAAA8;
+
 typedef union
 {
   double dblvalue;
@@ -123,9 +143,6 @@ struct eeprom_regs
 };
 
 eeprom_regs registers;
-
-//double amphour_in = 0;
-//double amphour_out = 0;
 
 volatile bool ALERT_TRIGGERED = false;
 uint16_t alert = 0;
@@ -277,7 +294,7 @@ int16_t i2c_readword(const uint8_t inareg)
 {
   Wire.beginTransmission(INA228_I2C_Address);
   Wire.write(inareg);
-  Wire.endTransmission();
+  uint8_t result = Wire.endTransmission();
   delayMicroseconds(10);
   Wire.requestFrom(INA228_I2C_Address, (uint8_t)2); // Request 2 bytes
 
@@ -296,7 +313,7 @@ uint32_t i2c_readUint24(const uint8_t inareg)
 {
   Wire.beginTransmission(INA228_I2C_Address);
   Wire.write(inareg);
-  Wire.endTransmission();
+  uint8_t result = Wire.endTransmission();
 
   delayMicroseconds(10);
   Wire.requestFrom(INA228_I2C_Address, (uint8_t)3); // Request 3 bytes
@@ -319,7 +336,7 @@ uint64_t i2c_readUint40(const uint8_t inareg)
 {
   Wire.beginTransmission(INA228_I2C_Address);
   Wire.write(inareg);
-  Wire.endTransmission();
+  uint8_t result = Wire.endTransmission();
   delayMicroseconds(10);
   Wire.requestFrom(INA228_I2C_Address, (uint8_t)5); // Request 5 bytes
   while (!Wire.available())
@@ -345,7 +362,7 @@ int64_t i2c_readInt40(const uint8_t inareg)
 {
   Wire.beginTransmission(INA228_I2C_Address);
   Wire.write(inareg);
-  Wire.endTransmission();
+  uint8_t result = Wire.endTransmission();
   delayMicroseconds(10);
   Wire.requestFrom(INA228_I2C_Address, (uint8_t)5); // Request 5 bytes
 
@@ -384,16 +401,40 @@ int32_t i2c_readInt24(const uint8_t inareg)
   return (int32_t)value;
 }
 
-void i2c_error()
+// pattern is a 32bit pattern to "play" on the RED LED to indicate failure
+void __attribute__((noreturn)) blinkPattern(uint32_t pattern)
 {
-  //Halt here with an error, i2c comms with INA228 failed
-  for (size_t i = 0; i < 100; i++)
+  uint32_t p = 0;
+
+  //Show the error 5 times
+  for (size_t x = 0; x < 5; x++)
   {
-    wdt_reset();
-    RedLED(true);
-    delay(50);
+
+    //Loop through the 32 bits - takes 1024ms in total
+    for (size_t i = 0; i < 32; i++)
+    {
+      wdt_reset();
+      if (p & 1)
+      {
+        RedLED(true);
+      }
+      else
+      {
+        RedLED(false);
+      }
+      p >>= 1;
+      if (!p)
+        p = pattern;
+      delay(32);
+    }
+
+    //Switch off LED and wait half second before repeating
     RedLED(false);
-    delay(50);
+    for (size_t i = 0; i < 10; i++)
+    {
+      wdt_reset();
+      delay(50);
+    }
   }
 
   //Finally just hang - this will trigger the watchdog causing a reboot
@@ -409,7 +450,7 @@ void ResetChargeEnergyRegisters()
 
   if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG | 0x1000))
   {
-    i2c_error();
+    blinkPattern(err_ResetChargeEnergyRegisters);
   }
 }
 
@@ -417,14 +458,14 @@ volatile uint16_t diag_alrt_value = 0;
 
 void SetINA228ConfigurationRegisters()
 {
-  uint8_t result = 0;
-
-  result += i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG);
-  result += i2c_writeword(INA_REGISTER::ADC_CONFIG, registers.R_ADC_CONFIG);
-
-  if (result != 2)
+  if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG))
   {
-    i2c_error();
+    blinkPattern(err_WriteConfig);
+  }
+
+  if (!i2c_writeword(INA_REGISTER::ADC_CONFIG, registers.R_ADC_CONFIG))
+  {
+    blinkPattern(err_WriteADCConfig);
   }
 }
 
@@ -432,18 +473,39 @@ void SetINA228Registers()
 {
   uint8_t result = 0;
 
-  result += i2c_writeword(INA_REGISTER::SHUNT_CAL, registers.R_SHUNT_CAL);
-  result += i2c_writeword(INA_REGISTER::SHUNT_TEMPCO, registers.R_SHUNT_TEMPCO);
-  result += i2c_writeword(INA_REGISTER::SOVL, registers.R_SOVL);
-  result += i2c_writeword(INA_REGISTER::SUVL, registers.R_SUVL);
-  result += i2c_writeword(INA_REGISTER::BOVL, registers.R_BOVL);
-  result += i2c_writeword(INA_REGISTER::BUVL, registers.R_BUVL);
-  result += i2c_writeword(INA_REGISTER::TEMP_LIMIT, registers.R_TEMP_LIMIT);
-  result += i2c_writeword(INA_REGISTER::PWR_LIMIT, registers.R_PWR_LIMIT);
-
-  if (result != 8)
+  if (!i2c_writeword(INA_REGISTER::SHUNT_CAL, registers.R_SHUNT_CAL))
   {
-    i2c_error();
+    blinkPattern(err_WriteRegisters);
+  }
+
+  if (!i2c_writeword(INA_REGISTER::SHUNT_TEMPCO, registers.R_SHUNT_TEMPCO))
+  {
+    blinkPattern(err_WriteRegisters);
+  }
+
+  if (!i2c_writeword(INA_REGISTER::SOVL, registers.R_SOVL))
+  {
+    blinkPattern(err_WriteRegisters);
+  }
+  if (!i2c_writeword(INA_REGISTER::SUVL, registers.R_SUVL))
+  {
+    blinkPattern(err_WriteRegisters);
+  }
+  if (!i2c_writeword(INA_REGISTER::BOVL, registers.R_BOVL))
+  {
+    blinkPattern(err_WriteRegisters);
+  }
+  if (!i2c_writeword(INA_REGISTER::BUVL, registers.R_BUVL))
+  {
+    blinkPattern(err_WriteRegisters);
+  }
+  if (!i2c_writeword(INA_REGISTER::TEMP_LIMIT, registers.R_TEMP_LIMIT))
+  {
+    blinkPattern(err_WriteRegisters);
+  }
+  if (!i2c_writeword(INA_REGISTER::PWR_LIMIT, registers.R_PWR_LIMIT))
+  {
+    blinkPattern(err_WriteRegisters);
   }
 }
 
@@ -652,13 +714,13 @@ void ConfigureI2C()
   Wire.beginTransmission(INA228_I2C_Address); // transmit to device
   if (Wire.endTransmission() > 0)
   {
-    i2c_error();
+    blinkPattern(err_INA228Missing);
   }
 
   //Now we know the INA228 is connected, reset to power on defaults
   if (!i2c_writeword(INA_REGISTER::CONFIG, (uint16_t)_BV(15)))
   {
-    i2c_error();
+    blinkPattern(err_INA228Reset);
   }
 
   //Allow the reset to work
@@ -672,30 +734,30 @@ void ConfigureI2C()
   //INA228 chip
   if (dieid != 0x228)
   {
-    i2c_error();
+    blinkPattern(err_WrongChip);
   }
 
   // Configure our registers (after reset)
   if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG))
   {
-    i2c_error();
+    blinkPattern(err_InitialConfigure);
   }
 
   if (!i2c_writeword(INA_REGISTER::ADC_CONFIG, registers.R_ADC_CONFIG))
   {
-    i2c_error();
+    blinkPattern(err_InitialConfigure);
   }
 
   //Shunt cal
   if (!i2c_writeword(INA_REGISTER::SHUNT_CAL, registers.R_SHUNT_CAL))
   {
-    i2c_error();
+    blinkPattern(err_InitialConfigure);
   }
 
   //SLOWALERT ALATCH
   if (!i2c_writeword(INA_REGISTER::DIAG_ALRT, registers.R_DIAG_ALRT))
   {
-    i2c_error();
+    blinkPattern(err_InitialConfigure);
   }
 
   //Check MEMSTAT=1 which proves the INA chip is not corrupt
@@ -706,7 +768,7 @@ void ConfigureI2C()
     //This bit is set to 0 if a checksum error is detected in the device trim memory space.
     //0h = Memory Checksum Error
     //1h = Normal Operation
-    i2c_error();
+    blinkPattern(err_CheckSumErr);
   }
 
   SetINA228Registers();

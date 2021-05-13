@@ -1,12 +1,8 @@
 #include "SimpleModbusSlave.h"
-//#include "HardwareSerial.h"
-
-// SimpleModbusSlaveV10
 
 #define BUFFER_SIZE (64 * 2 + 10)
 
 // frame[] is used to recieve and transmit packages.
-
 uint8_t frame[BUFFER_SIZE];
 const uint16_t holdingRegsSize = 55; // size of the register array
 
