@@ -13,10 +13,7 @@ filters:
     comment: 'Adjust rotation for JLCPCB'
     type: rot_footprint
     rotations:
-      - ["^TI_SO-", 270.0]
-      - ["^SO-", 270.0]
-      - ["^HTSSOP-", 270.0]
-      - ["^SSOP-", 270.0]
+	  - ["^SO-4_4.4x3.6mm_P2.54mm", 90.0]
 
 global:
   variant: default
