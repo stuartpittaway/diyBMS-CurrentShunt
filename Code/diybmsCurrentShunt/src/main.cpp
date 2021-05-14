@@ -67,23 +67,23 @@ FastCRC16 CRC16;
 
 //Sequences used to indicate error on RED led
 //Single flash
-const static uint32_t err_INA228Missing = 0xF0F00000;
+const static uint32_t err_INA228Missing = 0xF000000F;
 //Two flashes
-const static uint32_t err_InitialConfigure = 0xF0F0F000;
+const static uint32_t err_InitialConfigure = 0xF0F0000F;
 //3 flashes
-const static uint32_t err_WrongChip = 0xF0F0F0F0;
+const static uint32_t err_WrongChip = 0xF0F0F00F;
 //4 flashes (0xCC=2 flashes)
-const static uint32_t err_WriteConfig = 0xF0CCCC00;
+const static uint32_t err_WriteConfig = 0xCCCC000F;
 //5 flashes (0xC0=1 short flash)
-const static uint32_t err_WriteADCConfig = 0xF0CCCCC0;
+const static uint32_t err_WriteADCConfig = 0xCCCCC00F;
 //6 flashes
-const static uint32_t err_WriteRegisters = 0xF0CCCCCC;
+const static uint32_t err_WriteRegisters = 0xCCCCCC0F;
 //7 flashes (0xAA=4 fast flashes)
-const static uint32_t err_INA228Reset = 0xF0AAA800;
-//8 flashes
-const static uint32_t err_CheckSumErr = 0xF0AAAA00;
-//9 flashes
-const static uint32_t err_ResetChargeEnergyRegisters = 0xF0AAAAA8;
+const static uint32_t err_INA228Reset = 0xAAA8000F;
+//8 flashes  10101010101010100000000000001111
+const static uint32_t err_CheckSumErr = 0xAAAA000F;
+//9 flashes 00101010101010101010000000001111
+const static uint32_t err_ResetChargeEnergyRegisters = 0x2AAAA00F;
 
 typedef union
 {
@@ -404,11 +404,11 @@ int32_t i2c_readInt24(const uint8_t inareg)
 // pattern is a 32bit pattern to "play" on the RED LED to indicate failure
 void __attribute__((noreturn)) blinkPattern(uint32_t pattern)
 {
-  uint32_t p = 0;
 
-  //Show the error 5 times
-  for (size_t x = 0; x < 5; x++)
+  //Show the error 4 times
+  for (size_t x = 0; x < 4; x++)
   {
+    uint32_t p = pattern;
 
     //Loop through the 32 bits - takes 1024ms in total
     for (size_t i = 0; i < 32; i++)
@@ -423,19 +423,23 @@ void __attribute__((noreturn)) blinkPattern(uint32_t pattern)
         RedLED(false);
       }
       p >>= 1;
-      if (!p)
-        p = pattern;
-      delay(32);
+
+      //Give user enough time to count the pulses
+      delay(200);
     }
 
     //Switch off LED and wait half second before repeating
     RedLED(false);
-    for (size_t i = 0; i < 10; i++)
+    for (size_t i = 0; i < 40; i++)
     {
       wdt_reset();
       delay(50);
     }
   }
+
+  //Both LEDs on whilst we wait for WDT
+  RedLED(true);
+  GreenLED(true);
 
   //Finally just hang - this will trigger the watchdog causing a reboot
   delay(10000);
@@ -471,42 +475,21 @@ void SetINA228ConfigurationRegisters()
 
 void SetINA228Registers()
 {
-  uint8_t result = 0;
 
-  if (!i2c_writeword(INA_REGISTER::SHUNT_CAL, registers.R_SHUNT_CAL))
-  {
-    blinkPattern(err_WriteRegisters);
-  }
-
-  if (!i2c_writeword(INA_REGISTER::SHUNT_TEMPCO, registers.R_SHUNT_TEMPCO))
-  {
-    blinkPattern(err_WriteRegisters);
+#define I2C_WRITE_REG(reg, val)       \
+  if (!i2c_writeword(reg, val))       \
+  {                                   \
+    blinkPattern(err_WriteRegisters); \
   }
 
-  if (!i2c_writeword(INA_REGISTER::SOVL, registers.R_SOVL))
-  {
-    blinkPattern(err_WriteRegisters);
-  }
-  if (!i2c_writeword(INA_REGISTER::SUVL, registers.R_SUVL))
-  {
-    blinkPattern(err_WriteRegisters);
-  }
-  if (!i2c_writeword(INA_REGISTER::BOVL, registers.R_BOVL))
-  {
-    blinkPattern(err_WriteRegisters);
-  }
-  if (!i2c_writeword(INA_REGISTER::BUVL, registers.R_BUVL))
-  {
-    blinkPattern(err_WriteRegisters);
-  }
-  if (!i2c_writeword(INA_REGISTER::TEMP_LIMIT, registers.R_TEMP_LIMIT))
-  {
-    blinkPattern(err_WriteRegisters);
-  }
-  if (!i2c_writeword(INA_REGISTER::PWR_LIMIT, registers.R_PWR_LIMIT))
-  {
-    blinkPattern(err_WriteRegisters);
-  }
+  I2C_WRITE_REG(INA_REGISTER::SHUNT_CAL, registers.R_SHUNT_CAL)
+  I2C_WRITE_REG(INA_REGISTER::SHUNT_TEMPCO, registers.R_SHUNT_TEMPCO)
+  I2C_WRITE_REG(INA_REGISTER::SOVL, registers.R_SOVL)
+  I2C_WRITE_REG(INA_REGISTER::SUVL, registers.R_SUVL)
+  I2C_WRITE_REG(INA_REGISTER::BOVL, registers.R_BOVL)
+  I2C_WRITE_REG(INA_REGISTER::BUVL, registers.R_BUVL)
+  I2C_WRITE_REG(INA_REGISTER::TEMP_LIMIT, registers.R_TEMP_LIMIT)
+  I2C_WRITE_REG(INA_REGISTER::PWR_LIMIT, registers.R_PWR_LIMIT)
 }
 
 void SaveConfig()
@@ -821,6 +804,7 @@ void CalculateLSB()
 
 void setup()
 {
+
   //Did we have a watchdog reboot?
   if (RSTCTRL.RSTFR & RSTCTRL_WDRF_bm)
   {
@@ -836,6 +820,7 @@ void setup()
   RedLED(false);
   GreenLED(false);
   EnableWatchdog();
+
 
   if (ReadConfigFromEEPROM((uint8_t *)&registers, sizeof(eeprom_regs)) == false)
   {
