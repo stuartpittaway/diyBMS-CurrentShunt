@@ -1,11 +1,11 @@
 Row,Description,Part,References,Value,Footprint,Quantity Per PCB,Status,Datasheet,PartNumber,LCSCStockCode,JLCPCBRotation,JLC
 1,Unpolarized capacitor,C,C10,3.3nF,C_0805_2012Metric,1, ,~,CL21B332KBANNNC,C53175,,
 2,Unpolarized capacitor,C,C8 C9,10nF,C_0805_2012Metric,2, ,~,CL21B103KBANNNC,C1710,,
-3,Unpolarized capacitor,C,C3 C4 C12 C13 C14,100nF,C_0805_2012Metric,5, ,,CC0805KRX7R9BB104 C0805C104K1RECAUTO,C49678 C696367,,
+3,Unpolarized capacitor,C,C3 C4 C12 C13,100nF,C_0805_2012Metric,4, ,,CC0805KRX7R9BB104,C49678,,
 4,Unpolarized capacitor,C,C1 C2 C7,1uF,C_0805_2012Metric,3, ,~,CL21B105KBFNNNE,C28323,,
 5,Unpolarized capacitor,C,C5,1uF,C_1206_3216Metric,1, ,https://datasheet.lcsc.com/szlcsc/Samsung-Electro-Mechanics-CL31B105KCHNNNE_C13832.pdf,CL31B105KCHNNNE,C13832,,
 6,Unpolarized capacitor,C,C11,47uF,C_1210_3225Metric,1, ,https://search.murata.co.jp/Ceramy/image/img/A01X/G101/ENG/GRM32ER61C476KE15-01.pdf,GRM32ER61C476KE15L,C77101,,
-7,Unpolarized capacitor,C,C6,100nF 100V,C_0805_2012Metric,1, ,https://datasheet.lcsc.com/szlcsc/2008131833_KEMET-C0805C104K1RECAUTO_C696367.pdf,C0805C104K1RECAUTO,C696367,,
+7,Unpolarized capacitor,C,C6 C14,100nF 100V,C_0805_2012Metric,2, ,https://datasheet.lcsc.com/szlcsc/2008131833_KEMET-C0805C104K1RECAUTO_C696367.pdf,C0805C104K1RECAUTO,C696367,,
 8,Schottky diode,D_Schottky,D1,400V 1A 1.3V @ 1A 150ns SMA,D_SMA,1, ,https://datasheet.lcsc.com/szlcsc/1810170425_Diodes-Incorporated-RS1G-13-F_C85103.pdf,RS1G-13-F,C85103,,
 9,Light emitting diode,LED,D2,GREEN,LED_0805_2012Metric,1, ,~,,C2297,,
 10,Light emitting diode,LED,D3,RED,LED_0805_2012Metric,1, ,~,,C84256,,
