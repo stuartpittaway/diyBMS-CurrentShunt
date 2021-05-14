@@ -31,5 +31,5 @@ SW1 ,1,"SW_DIP_x02","Button_Switch_THT:SW_DIP_SPSTx02_Slide_6.7x6.64mm_W7.62mm_P
 U1 ,1,"TLP172GM","Package_SO:SO-4_4.4x3.6mm_P2.54mm","https://datasheet.lcsc.com/szlcsc/TOSHIBA-TLP172GM-TPL-E-O_C261926.pdf","TLP172GM","C261926"
 U2 ,1,"ATtiny1614-SS","Package_SO:SOIC-14_3.9x8.7mm_P1.27mm","http://ww1.microchip.com/downloads/en/DeviceDoc/ATtiny1614-data-sheet-40001995A.pdf","ATTINY1614-SSNR","C481364"
 U3 ,1,"INA228","Package_SO:VSSOP-10_3x3mm_P0.5mm","https://www.ti.com/lit/ds/symlink/ina228.pdf","INA228",""
-U4 ,1,"ADM2483xRW","Package_SO:SOIC-16W_7.5x10.3mm_P1.27mm","https://www.analog.com/media/en/technical-documentation/data-sheets/adm2483.pdf","ADM2483BRWZ-REEL","C9637"
+U4 ,1,"ADM2483xRW","Package_SO:SOIC-16W_7.5x10.3mm_P1.27mm","https://www.analog.com/media/en/technical-documentation/data-sheets/adm2483.pdf","ADM2483BRWZ-REEL","C386280"
 U5 ,1,"LM5009A","Package_SO:MSOP-8_3x3mm_P0.65mm","https://www.ti.com/lit/ds/symlink/lm5009a.pdf","LM5009AMMX/NOPB","C477978"

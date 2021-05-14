@@ -25,7 +25,7 @@ Row,Description,Part,References,Value,Footprint,Quantity Per PCB,Status,Datashee
 24,Resistor,R,R5,470k,R_0805_2012Metric,1, ,~,0805W8F4703T5E,C17709,,
 25,Resistor,R,R3,680k,R_0805_2012Metric,1, ,~,0805W8F6803T5E,C17797,,
 26,"2x DIP Switch, Single Pole Single Throw (SPST) switch, small symbol",SW_DIP_x02,SW1,SW_DIP_x02,SW_DIP_SPSTx02_Slide_6.7x6.64mm_W7.62mm_P2.54mm_LowProfile,1, ,https://datasheet.lcsc.com/szlcsc/2004251705_Korean-Hroparts-Elec-DS-02BP_C458081.pdf,,C458081,,
-27,"Isolated RS485/RS422 Transceiver, Half-Duplex, 500kbps, SOIC-16W",ADM2483xRW,U4,ADM2483xRW,SOIC-16W_7.5x10.3mm_P1.27mm,1, ,https://www.analog.com/media/en/technical-documentation/data-sheets/adm2483.pdf,ADM2483BRWZ-REEL,C9637,,
+27,"Isolated RS485/RS422 Transceiver, Half-Duplex, 500kbps, SOIC-16W",ADM2483xRW,U4,ADM2483xRW,SOIC-16W_7.5x10.3mm_P1.27mm,1, ,https://www.analog.com/media/en/technical-documentation/data-sheets/adm2483.pdf,ADM2483BRWZ-REEL,C386280,,
 28,"20MHz, 16kB Flash, 2kB SRAM, 256B EEPROM, SOIC-14",ATtiny1614-SS,U2,ATtiny1614-SS,SOIC-14_3.9x8.7mm_P1.27mm,1, ,http://ww1.microchip.com/downloads/en/DeviceDoc/ATtiny1614-data-sheet-40001995A.pdf,ATTINY1614-SSNR,C481364,,
 29,"High-Side or Low-Side Measurement, Bi-Directional Current and Power Monitor (0-36V) with I2C Compatible Interface, VSSOP-10",INA226,U3,INA228,VSSOP-10_3x3mm_P0.5mm,1, ,https://www.ti.com/lit/ds/symlink/ina228.pdf,INA228,,,
 30,"LM5009A 100-V, 150-mA Constant ON-Time Buck Switching Regulator",LM5009A,U5,LM5009A,MSOP-8_3x3mm_P0.65mm,1, ,https://www.ti.com/lit/ds/symlink/lm5009a.pdf,LM5009AMMX/NOPB,C477978,,
