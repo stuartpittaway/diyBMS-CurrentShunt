@@ -315,7 +315,7 @@ F 1 "ADM2483xRW" H 8440 4735 50  0000 L CNN
 F 2 "Package_SO:SOIC-16W_7.5x10.3mm_P1.27mm" H 8475 4830 50  0001 C CNN
 F 3 "https://www.analog.com/media/en/technical-documentation/data-sheets/adm2483.pdf" H 7725 5580 50  0001 C CNN
 F 4 "ADM2483BRWZ-REEL" H 8475 5530 50  0001 C CNN "PartNumber"
-F 5 "C9637" H 8475 5530 50  0001 C CNN "LCSCStockCode"
+F 5 "C386280" H 8475 5530 50  0001 C CNN "LCSCStockCode"
 	1    8475 5530
 	1    0    0    -1  
 $EndComp
