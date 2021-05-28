@@ -20,7 +20,7 @@ https://patreon.com/StuartP
 
 This repository contains the hardware designs, generally in KiCad format.  Unless you are changing the design, you don't need to use/install KiCad, just use the premade files.
 
-The GERBER files are in the [export folder](CurrentShuntCircuit/export), along with the files for JLCPCB assembly service.
+The GERBER files are in the [export folder](CurrentShuntCircuit/export), along with the files for JLCPCB assembly service.  You need to request the BOTTOM of the board to be assembled!!
 
 If you use this coupon code when you place a JLCPCB order
 
@@ -32,18 +32,29 @@ https://jlcpcb.com/RSZ
 
 you will get a discount and I get a very small amount of credit for every 30 orders, which helps to support the cost of prototyping new designs and adding new features.
 
-
 Gerber and BOM files are automatically generated when changes are made to the design and pushed into GITHUB.
 
-<img alt='top' src="./CurrentShuntCircuit/export/CurrentShuntCircuit-top.png" width="20%"/>
+<img alt='top' src="./CurrentShuntCircuit/export/CurrentShuntCircuit-top.png" width="50%"/>
 
-<img alt='bottom' src="./CurrentShuntCircuit/export/CurrentShuntCircuit-bottom.png" width="20%"/>
+<img alt='bottom' src="./CurrentShuntCircuit/export/CurrentShuntCircuit-bottom.png" width="50%"/>
 
 # CODE/FIRMWARE
 
 The board uses an ATTINY1614 chip, this requires an UPDI style of programmer, you can use an old Arduino style board to do this.  Take a look at [this](https://create.arduino.cc/projecthub/john-bradnam/create-your-own-updi-programmer-1e55f1).
 
 Source code is located in the [Code](Code) folder, and requires PLATFORM.IO to compile.
+
+# SHUNT
+
+The design is based on 50mV shunts, such as the Murata range
+
+* 3020-01100-0 [150A](https://uk.farnell.com/murata-power-solutions/3020-01100-0/dc-shunt-150a-0-05v-screw/dp/2932602)
+* 3020-0110X-0 [200A](https://uk.rs-online.com/web/p/shunts/8103277/) or [500A](https://uk.rs-online.com/web/p/shunts/8233570/)
+
+technically, any 50mV shunt can be used, but the PCB is drilled specifically for the footprints of these devices.
+
+Note: Always pick a shunt at least 25% higher rating than you expect your maximum current load to be.
+
 
 # WARNING
 
