@@ -22,6 +22,10 @@ This repository contains the hardware designs, generally in KiCad format.  Unles
 
 The GERBER files are in the [export folder](CurrentShuntCircuit/export), along with the files for JLCPCB assembly service.  You need to request the BOTTOM of the board to be assembled!!
 
+* [current_monitor_gerbers.zip](CurrentShuntCircuit/export/current_monitor_gerbers.zip)
+* [CurrentShuntCircuit_bom_jlc.csv](CurrentShuntCircuit/export/CurrentShuntCircuit_bom_jlc.csv)
+* [CurrentShuntCircuit_cpl_jlc.csv](CurrentShuntCircuit/export/CurrentShuntCircuit_cpl_jlc.csv)
+
 If you use this coupon code when you place a JLCPCB order
 
 JLC-Stuart
