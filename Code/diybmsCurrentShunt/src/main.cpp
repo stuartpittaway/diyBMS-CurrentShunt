@@ -821,7 +821,6 @@ void setup()
   GreenLED(false);
   EnableWatchdog();
 
-
   if (ReadConfigFromEEPROM((uint8_t *)&registers, sizeof(eeprom_regs)) == false)
   {
     //Flash RED led 5 times to indicate facory reset
@@ -881,6 +880,7 @@ void setup()
     registers.relay_trigger_bitmap = ALL_ALERT_BITS;
   }
 
+  //Flash LED to indicate normal boot up
   for (size_t i = 0; i < 6; i++)
   {
     GreenLED(true);
