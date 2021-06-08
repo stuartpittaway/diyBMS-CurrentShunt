@@ -1496,7 +1496,7 @@ void loop()
       }
       else
       {
-        charge_c_in += difference;
+        charge_c_in += abs(difference);
       }
     }
 
