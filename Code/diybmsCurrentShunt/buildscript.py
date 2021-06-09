@@ -2,7 +2,9 @@ Import("env")
 
 platform = env.PioPlatform()
 
-if env.get("BOARD")=="attiny1614":
+#print(env.get("BOARD"))
+
+if env.get("BOARD")=="ATtiny1614":
     #print(env)
     #print(platform)
 
@@ -15,5 +17,5 @@ if env.get("BOARD")=="attiny1614":
 #    hfuse=hex(int(env.GetProjectOption("board_fuses.hfuse"), 2)).upper()[2:4]
 #    lfuse=hex(int(env.GetProjectOption("board_fuses.lfuse"), 2)).upper()[2:4]
 
-    env.Replace(PROGNAME="currentmon_fw_%s_%s" % (env["PIOENV"],env.get("BOARD") ))
+    env.Replace(PROGNAME="%s_%s" % (env["PIOENV"],env.get("BOARD") ))
 
