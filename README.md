@@ -26,7 +26,6 @@ The GERBER files are in the [export folder](CurrentShuntCircuit/export), along w
 * [CurrentShuntCircuit_bom_jlc.csv](../../raw/master/CurrentShuntCircuit/export/CurrentShuntCircuit_bom_jlc.csv)
 * [CurrentShuntCircuit_cpl_jlc.csv](../../raw/master/CurrentShuntCircuit/export/CurrentShuntCircuit_cpl_jlc.csv)
 
-
 If you use this coupon code when you place a JLCPCB order
 
 JLC-Stuart
@@ -39,15 +38,12 @@ you will get a discount and I get a very small amount of credit for every 30 ord
 
 Gerber and BOM files are automatically generated when changes are made to the design and pushed into GITHUB.
 
+The bill of materials (BOM) is [here](./CurrentShuntCircuit/export/CurrentShuntCircuit-bom.csv)
+
 <img alt='top' src="./CurrentShuntCircuit/export/CurrentShuntCircuit-top.png" width="50%"/>
 
 <img alt='bottom' src="./CurrentShuntCircuit/export/CurrentShuntCircuit-bottom.png" width="50%"/>
 
-# CODE/FIRMWARE
-
-The board uses an ATTINY1614 chip, this requires an UPDI style of programmer, you can use an old Arduino style board to do this.  Take a look at [this](https://create.arduino.cc/projecthub/john-bradnam/create-your-own-updi-programmer-1e55f1).
-
-Source code is located in the [Code](Code) folder, and requires PLATFORM.IO to compile.
 
 # SHUNT
 
@@ -59,6 +55,18 @@ The design is based on 50mV shunts, such as the Murata range
 technically, any 50mV shunt can be used, but the PCB is drilled specifically for the footprints of these devices.
 
 Note: Always pick a shunt at least 25% higher rating than you expect your maximum current load to be.
+
+
+# CODE/FIRMWARE
+
+[![build-code](https://github.com/stuartpittaway/diyBMS-CurrentShunt/actions/workflows/build-code.yaml/badge.svg?branch=master)](https://github.com/stuartpittaway/diyBMS-CurrentShunt/actions/workflows/build-code.yaml)
+
+The board uses an ATTINY1614 chip, this requires an UPDI style of programmer, you can use an old Arduino style board to do this.  Take a look at [this](https://create.arduino.cc/projecthub/john-bradnam/create-your-own-updi-programmer-1e55f1).
+
+Source code is located in the [Code](Code) folder, and requires PLATFORM.IO to compile.
+
+Precompiled versions are available in the [releases](https://github.com/stuartpittaway/diyBMS-CurrentShunt/releases) page.  You use AVRDUDE to program these to the ATTINY chip using an UPDI programmer.
+
 
 
 # WARNING
