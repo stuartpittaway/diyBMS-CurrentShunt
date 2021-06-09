@@ -63,7 +63,7 @@ jobs:
 
     - name: ZIP output for release
       run: |
-        zip release.zip ~/OUTPUT/CurrentMonitorCode/HEX/*.*
+        zip --junk-paths release.zip ~/OUTPUT/CurrentMonitorCode/HEX/diyBMSCurrentMonitor_ATtiny1614.hex
 
     - name: Rename zip
       run: mv release.zip release_${{ env.dt }}.zip
