@@ -45,6 +45,11 @@ The bill of materials (BOM) is [here](./CurrentShuntCircuit/export/CurrentShuntC
 <img alt='bottom' src="./CurrentShuntCircuit/export/CurrentShuntCircuit-bottom.png" width="50%"/>
 
 
+## diyBMS Controller Changes
+
+You need to add a "blob" of solder across solder bridge JP4 on the DIYBMS controller to enable RS485 termination resistor.
+
+
 # SHUNT
 
 The design is based on 50mV shunts, such as the Murata range
