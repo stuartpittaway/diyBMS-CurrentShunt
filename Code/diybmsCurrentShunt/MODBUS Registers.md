@@ -6,25 +6,27 @@ For valid results you must read both registers as part of the same request, othe
 
 All registers are read only, unless also specified in "Write Registers" later on
 
-40001|Voltage (4 byte double)
-40002|Voltage
-40003|Current (4 byte double)
-40004|Current
-40005|milliamphour_out (4 byte unsigned long uint32_t)
-40006|milliamphour_out
-40007|milliamphour_in (4 byte  unsigned long uint32_t)
-40008|milliamphour_in
-40009|temperature (signed int16)
-40010|Various status flags (see below)
-40011|Power (4 byte double)
-40012|Power
-40013|Shunt mV (4 byte double)
-40014|Shunt mV
-40015|CURRENT_LSB (4 byte double)
-40016|CURRENT_LSB
-40017|shunt_resistance (4 byte double)
-40018|shunt_resistance
-40019|shunt_max_current  (unsigned int16)
+|Register|Description|
+|--------|-----------|
+|40001|Voltage (4 byte double)
+|40002|Voltage
+|40003|Current (4 byte double)
+|40004|Current
+|40005|milliamphour_out (4 byte unsigned long uint32_t)
+|40006|milliamphour_out
+|40007|milliamphour_in (4 byte  unsigned long uint32_t)
+|40008|milliamphour_in
+|40009|temperature (signed int16)
+|40010|Various status flags (see below)
+|40011|Power (4 byte double)
+|40012|Power
+|40013|Shunt mV (4 byte double)
+|40014|Shunt mV
+|40015|CURRENT_LSB (4 byte double)
+|40016|CURRENT_LSB
+|40017|shunt_resistance (4 byte double)
+|40018|shunt_resistance
+|40019|shunt_max_current  (unsigned int16)
 40020|shunt_millivolt  (unsigned int16)
 40021|INA_REGISTER::SHUNT_CAL (unsigned int16)
 40022|Temperature limit (signed int16)
@@ -61,14 +63,14 @@ All registers are read only, unless also specified in "Write Registers" later on
 
 # 0x16 Write Multiple Registers
 
+|Register|Description|Example|
+|--------|-----------|-------|
 40005/40006|amphour_out|Set to zero to reset
 40007/40008|amphour_in|Set to zero to reset
-40010|Watchdog timer trigger count (like error counter) (unsigned int16)
-
+40010|Watchdog timer trigger count (like error counter) (unsigned int16)|
 40019|shunt_max_current  (unsigned int16) |e.g. 150
 40020|shunt_millivolt  (unsigned int16) |e.g. 50
 40021|SHUNT_CAL (unsigned int16) **
-
 40022|Temperature limit (signed int16)|degrees C)
 40023/40024|Bus Overvoltage (overvoltage protection)(4 byte double)|Volts
 40025/40026|Bus Under Volt (4 byte double) |Volts
@@ -78,12 +80,13 @@ All registers are read only, unless also specified in "Write Registers" later on
 
 ** For normal configuration, just set the shunt maximum current and millivolt registers.  Shunt_Cal is calculated as needed based on those values.  For fine tuning calibration, the SHUNT_CAL register can be written to/adjusted.  Once a register is set, it is stored in EEPROM and used when shunt is powered up.
 
-
 # Bit values for Register 40010 (status flags)
 
 Returns a BIT value (on/off) for the following configuration items:
 
 (First byte)
+|Bit|Description|Read write|
+|--------|-----------|-------|
 16|TMPOL|Read only
 15|SHNTOL|Read only
 14|SHNTUL|Read only
@@ -94,6 +97,8 @@ Returns a BIT value (on/off) for the following configuration items:
 9|ADC Range 0=±163.84 mV, 1=±40.96 mV (only 40.96mV supported by diyBMS)|Read only
 
 (Second byte)
+|Bit|Description|Read write|
+|--------|-----------|-------|
 8|Relay Trigger on TMPOL|Read write
 7|Relay Trigger on SHNTOL|Read write
 6|Relay Trigger on SHNTUL|Read write
