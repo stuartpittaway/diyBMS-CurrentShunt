@@ -4,6 +4,7 @@ Isolated current, voltage and amp hour counting monitor for battery banks up to 
 
 Designed for use with the diyBMS controller, although can be operated standalone using RS485 and MODBUS
 
+The MODBUS register list is [here](../Code/diybmsCurrentShunt/MODBUS Registers.md)
 
 # Videos on how to use and build
 
@@ -15,6 +16,10 @@ Designed for use with the diyBMS controller, although can be operated standalone
 If you find the BMS useful, please consider buying me a beer, check out Patron for more information
 
 https://patreon.com/StuartP
+
+Forum:
+https://community.openenergymonitor.org/c/hardware/diybms/53
+
 
 # HARDWARE
 
@@ -45,6 +50,15 @@ The bill of materials (BOM) is [here](./CurrentShuntCircuit/export/CurrentShuntC
 <img alt='bottom' src="./CurrentShuntCircuit/export/CurrentShuntCircuit-bottom.png" width="50%"/>
 
 
+## Texas Instruments
+
+### INA228 (current sensor)
+https://www.ti.com/product/INA228
+
+### LM5009A (voltage regulator)
+https://www.ti.com/product/LM5009A
+
+
 ## diyBMS Controller Changes
 
 You need to add a "blob" of solder across solder bridge JP4 on the DIYBMS controller to enable RS485 termination resistor.
@@ -59,6 +73,8 @@ The design is based on 50mV shunts, such as the Murata range
 
 technically, any 50mV shunt can be used, but the PCB is drilled specifically for the footprints of these devices.
 
+Larger rating shunts will work, but won't fit onto the PCB
+
 Note: Always pick a shunt at least 25% higher rating than you expect your maximum current load to be.
 
 
@@ -71,6 +87,7 @@ The board uses an ATTINY1614 chip, this requires an UPDI style of programmer, yo
 Source code is located in the [Code](Code) folder, and requires PLATFORM.IO to compile.
 
 Precompiled versions are available in the [releases](https://github.com/stuartpittaway/diyBMS-CurrentShunt/releases) page.  You use AVRDUDE to program these to the ATTINY chip using an UPDI programmer.
+
 
 
 
