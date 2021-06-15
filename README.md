@@ -4,7 +4,7 @@ Isolated current, voltage and amp hour counting monitor for battery banks up to 
 
 Designed for use with the diyBMS controller, although can be operated standalone using RS485 and MODBUS
 
-The MODBUS register list is [here](../Code/diybmsCurrentShunt/MODBUS Registers.md)
+The MODBUS register list is [here](./Code/diybmsCurrentShunt/MODBUS%20Registers.md)
 
 # Videos on how to use and build
 
