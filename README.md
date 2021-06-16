@@ -88,8 +88,17 @@ Source code is located in the [Code](Code) folder, and requires PLATFORM.IO to c
 
 Precompiled versions are available in the [releases](https://github.com/stuartpittaway/diyBMS-CurrentShunt/releases) page.  You use AVRDUDE to program these to the ATTINY chip using an UPDI programmer.
 
+## Programming ATTINY1614
 
+Use the file diyBMSCurrentMonitor_ATtiny1614.hex from the releases section.  This is precompiled for you, so after this all you need to do is use AVRDUDE to program the device.
 
+AVRDUDE can be downloaded from [here](http://savannah.nongnu.org/projects/avrdude)
+
+Change "COM8" to match your environment.  
+
+```
+avrdude -v -p attiny1614 -C avrdude.conf -c jtag2updi -b 115200 -P "COM8" -U flash:w:diyBMSCurrentMonitor_ATtiny1614.hex:i
+```
 
 # WARNING
 
