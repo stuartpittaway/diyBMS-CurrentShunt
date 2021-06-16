@@ -1082,13 +1082,13 @@ uint16_t ReadHoldingRegister(uint16_t address)
   {
     //milliamphour_out
     milliamphour_out = charge_c_out * CoulombsToMilliAmpHours;
-    return (uint16_t)milliamphour_out >> 16;
+    return (uint16_t)(milliamphour_out >> 16);
     break;
   }
 
   case 5:
   {
-    //milliamphour_out
+    //milliamphour_out (low 16 bits)
     return (uint16_t)milliamphour_out;
     break;
   }
@@ -1097,13 +1097,13 @@ uint16_t ReadHoldingRegister(uint16_t address)
   {
     //milliamphour_in
     milliamphour_in = charge_c_in * CoulombsToMilliAmpHours;
-    return (uint16_t)milliamphour_in >> 16;
+    return (uint16_t)(milliamphour_in >> 16);
     break;
   }
 
   case 7:
   {
-    //milliamphour_in
+    //milliamphour_in (low 16 bits)
     return (uint16_t)milliamphour_in;
     break;
   }
