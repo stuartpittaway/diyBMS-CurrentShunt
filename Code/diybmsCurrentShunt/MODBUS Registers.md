@@ -55,10 +55,10 @@ All registers are read only, unless also specified in "Write Registers" later on
 |40043|GITHUB version
 |40044|COMPILE_DATE_TIME_EPOCH
 |40045|COMPILE_DATE_TIME_EPOCH
-|40046|Watchdog timer trigger count (like error counter)
-|40047|DEBUG CONFIG
-|40048|DEBUG ADC_CONFIG
-|40049|DEBUG SHUNT_CAL
+|40046|Watchdog timer trigger count (like error counter)(unsigned int16)
+|40047|DEBUG CONFIG (unsigned int16)
+|40048|DEBUG ADC_CONFIG (unsigned int16)
+|40049|DEBUG SHUNT_CAL (unsigned int16)
 |40050|DEBUG SHUNT_TEMPCO
 |40051|DEBUG DIAG_ALRT
 |40052|DEBUG SOVL
