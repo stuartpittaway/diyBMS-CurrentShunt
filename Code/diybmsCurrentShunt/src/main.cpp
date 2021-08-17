@@ -140,6 +140,11 @@ struct eeprom_regs
   double full_scale_current;
   double CURRENT_LSB;
   double RSHUNT;
+
+  uint16_t batterycapacity_amphour;
+  double fully_charged_voltage;
+  double tail_current_amps;
+  double charge_efficiency_factor;
 };
 
 eeprom_regs registers;
@@ -149,6 +154,7 @@ uint16_t alert = 0;
 
 volatile bool wdt_triggered = false;
 volatile uint16_t wdt_triggered_count;
+volatile uint16_t SOC;
 
 void ConfigurePorts()
 {
@@ -581,7 +587,6 @@ bool SetRegister(uint16_t address, uint16_t value)
 
     //Set CONFIG and ADC_CONFIG
     SetINA228ConfigurationRegisters();
-
     break;
   }
 
@@ -602,29 +607,36 @@ bool SetRegister(uint16_t address, uint16_t value)
   case 20:
   {
     //|40021|Battery Capacity (ah)  (unsigned int16)
+    registers.batterycapacity_amphour = value;
     break;
   }
   case 22:
   {
     //|40023|Fully charged voltage
+    newvalue.word[1] = value;
+    registers.fully_charged_voltage = newvalue.dblvalue;
     break;
   }
 
   case 24:
   {
     //|40025|Tail current (Amps)
+    newvalue.word[1] = value;
+    registers.tail_current_amps = newvalue.dblvalue;
     break;
   }
   case 25:
   {
     //|40026|Charge efficiency factor % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 9561 = 95.61%)
+    registers.charge_efficiency_factor = ((double)value) / 100.0;
     break;
   }
-  case 26:
-  {
+    //case 26:
+    //{
     //|40027|State of charge % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 8012 = 80.12%, 100 = 1.00%)
-    break;
-  }
+    //registers.batterycapacity_amphour = value;
+    //break;
+    //}
 
   case 27:
   {
@@ -889,6 +901,11 @@ void setup()
     registers.shunt_max_current = 150;
     registers.shunt_millivolt = 50;
 
+    registers.batterycapacity_amphour = 200;
+    registers.fully_charged_voltage = 52.8;
+    registers.tail_current_amps = 5;
+    registers.charge_efficiency_factor = 99.5;
+
     //SLOWALERT = Wait for full sample averaging time before triggering alert (about 1.5 seconds)
     registers.R_DIAG_ALRT = bit(DIAG_ALRT_FIELD::SLOWALERT);
 
@@ -912,6 +929,8 @@ void setup()
     //By default, trigger relay on all alerts
     registers.relay_trigger_bitmap = ALL_ALERT_BITS;
   }
+
+  SOC = 100 * 100;
 
   //Flash LED to indicate normal boot up
   for (size_t i = 0; i < 6; i++)
@@ -1078,6 +1097,8 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   static DoubleUnionType copy_current_lsb;
   static DoubleUnionType copy_shunt_resistance;
+  static DoubleUnionType copy_fully_charged_voltage;
+  static DoubleUnionType copy_tail_current_amps;
 
   switch (address)
   {
@@ -1224,43 +1245,45 @@ uint16_t ReadHoldingRegister(uint16_t address)
   case 20:
   {
     //|40021|Battery Capacity (ah)  (unsigned int16)
-    return 0;
+    return registers.batterycapacity_amphour;
     break;
   }
   case 21:
   {
     //|40022|Fully charged voltage (4 byte double)
-    return 0;
+    copy_fully_charged_voltage.dblvalue = registers.fully_charged_voltage;
+    return copy_fully_charged_voltage.word[0];
     break;
   }
   case 22:
   {
     //|40023|Fully charged voltage
-    return 0;
+    return copy_fully_charged_voltage.word[1];
     break;
   }
   case 23:
   {
     //|40024|Tail current (Amps) (4 byte double)
-    return 0;
+    copy_tail_current_amps.dblvalue = registers.tail_current_amps;
+    return copy_tail_current_amps.word[0];
     break;
   }
   case 24:
   {
     //|40025|Tail current (Amps)
-    return 0;
+    return copy_tail_current_amps.word[1];
     break;
   }
   case 25:
   {
     //|40026|Charge efficiency factor % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 9561 = 95.61%)
-    return 0;
+    return (uint16_t)(registers.charge_efficiency_factor * 100.0);
     break;
   }
   case 26:
   {
     //|40027|State of charge % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 8012 = 80.12%, 100 = 1.00%)
-    return 0;
+    return SOC;
     break;
   }
   case 27:
