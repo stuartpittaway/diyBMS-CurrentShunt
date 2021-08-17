@@ -27,60 +27,72 @@ All registers are read only, unless also specified in "Write Registers" later on
 |40017|shunt_resistance (4 byte double)
 |40018|shunt_resistance
 |40019|shunt_max_current  (unsigned int16)
-40020|shunt_millivolt  (unsigned int16)
-40021|INA_REGISTER::SHUNT_CAL (unsigned int16)
-40022|Temperature limit (signed int16)
-40023|Bus Overvoltage (overvoltage protection)(4 byte double)
-40024|Bus Overvoltage (overvoltage protection)
-40025|BusUnderVolt (4 byte double)
-40026|BusUnderVolt
-40027|Shunt Over Voltage Limit (current limit) (4 byte double)
-40028|Shunt Over Voltage Limit (current limit) 
-40029|Shunt UNDER Voltage Limit (under current limit) (4 byte double)
-40030|Shunt UNDER Voltage Limit (under current limit)
-40031|Shunt Over POWER LIMIT (4 byte double)
-40032|Shunt Over POWER LIMIT
-40033|Shunt Temperature Coefficient (SHUNT_TEMPCO) (unsigned int16)
-40034|INAXXX chip model number (should always be 0x0228)
-40035|GITHUB version
-40036|GITHUB version
-40037|COMPILE_DATE_TIME_EPOCH
-40038|COMPILE_DATE_TIME_EPOCH
-40039|Watchdog timer trigger count (like error counter)
-40040|DEBUG CONFIG
-40041|DEBUG ADC_CONFIG
-40042|DEBUG SHUNT_CAL
-40043|DEBUG SHUNT_TEMPCO
-40044|DEBUG DIAG_ALRT
-40045|DEBUG SOVL
-40046|DEBUG SUVL
-40047|DEBUG BOVL
-40049|DEBUG BUVL
-40050|DEBUG TEMP_LIMIT
-40051|DEBUG PWR_LIMIT
-40052|DEBUG DIETEMP
+|40020|shunt_millivolt  (unsigned int16)
 
+|40021|Battery Capacity (ah)  (unsigned int16)
+|40022|Fully charged voltage (4 byte double)
+|40023|Fully charged voltage
+|40024|Tail current (Amps) (4 byte double)
+|40025|Tail current (Amps)
+|40026|Charge efficiency factor % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 9561 = 95.61%)
+|40027|State of charge % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 8012 = 80.12%, 100 = 1.00%)
+
+|40028|INA_REGISTER::SHUNT_CAL (unsigned int16)
+|40029|Temperature limit (signed int16)
+|40030|Bus Overvoltage (overvoltage protection)(4 byte double)
+|40031|Bus Overvoltage (overvoltage protection)
+|40032|BusUnderVolt (4 byte double)
+|40033|BusUnderVolt
+|40034|Shunt Over Voltage Limit (current limit) (4 byte double)
+|40035|Shunt Over Voltage Limit (current limit) 
+|40036|Shunt UNDER Voltage Limit (under current limit) (4 byte double)
+|40037|Shunt UNDER Voltage Limit (under current limit)
+|40038|Shunt Over POWER LIMIT (4 byte double)
+|40039|Shunt Over POWER LIMIT
+|40040|Shunt Temperature Coefficient (SHUNT_TEMPCO) (unsigned int16)
+|40041|INAXXX chip model number (should always be 0x0228)
+|40042|GITHUB version
+|40043|GITHUB version
+|40044|COMPILE_DATE_TIME_EPOCH
+|40045|COMPILE_DATE_TIME_EPOCH
+|40046|Watchdog timer trigger count (like error counter)
+|40047|DEBUG CONFIG
+|40048|DEBUG ADC_CONFIG
+|40049|DEBUG SHUNT_CAL
+|40050|DEBUG SHUNT_TEMPCO
+|40051|DEBUG DIAG_ALRT
+|40052|DEBUG SOVL
+|40053|DEBUG SUVL
+|40054|DEBUG BOVL
+|40055|DEBUG BUVL
+|40056|DEBUG TEMP_LIMIT
+|40057|DEBUG PWR_LIMIT
+|40058|DEBUG DIETEMP
 
 # 0x16 Write Multiple Registers
 
 |Register|Description|Example|
 |--------|-----------|-------|
-40005/40006|amphour_out|Set to zero to reset
-40007/40008|amphour_in|Set to zero to reset
-40010|Watchdog timer trigger count (like error counter) (unsigned int16)|
-40019|shunt_max_current  (unsigned int16) |e.g. 150
-40020|shunt_millivolt  (unsigned int16) |e.g. 50
-40021|SHUNT_CAL (unsigned int16) **
-40022|Temperature limit (signed int16)|degrees C)
-40023/40024|Bus Overvoltage (overvoltage protection)(4 byte double)|Volts
-40025/40026|Bus Under Volt (4 byte double) |Volts
-40027/40028|Shunt Over Voltage Limit (current limit) (4 byte double)|Current
-40029/40030|Shunt UNDER Voltage Limit (under current limit) (4 byte double)|Current
-40031/40032|Shunt Over POWER LIMIT (4 byte double)|Power
+|40005/40006|amphour_out|Set to zero to reset
+|40007/40008|amphour_in|Set to zero to reset
+|40010|Watchdog timer trigger count (like error counter) (unsigned int16)|
+|40019|shunt_max_current  (unsigned int16) |e.g. 150
+|40020|shunt_millivolt  (unsigned int16) |e.g. 50
+|40021/40022|Battery Capacity (ah)  (unsigned int16)
+|40023/40024|Fully charged voltage
+|40025|Tail current (Amps)
+|40026|Charge efficiency factor % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 9561 = 95.61%)
+|40028|SHUNT_CAL (unsigned int16) **
+|40029|Temperature limit (signed int16)|degrees C)
+|40030/40031|Bus Overvoltage (overvoltage protection)(4 byte double)|Volts
+|40032/40033|Bus Under Volt (4 byte double) |Volts
+|40034/40035|Shunt Over Voltage Limit (current limit) (4 byte double)|Current
+|40036/40037|Shunt UNDER Voltage Limit (under current limit) (4 byte double)|Current
+|40038/40039|Shunt Over POWER LIMIT (4 byte double)|Power
 
 ** For normal configuration, just set the shunt maximum current and millivolt registers.  Shunt_Cal is calculated as needed based on those values.  For fine tuning calibration, the SHUNT_CAL register can be written to/adjusted.  Once a register is set, it is stored in EEPROM and used when shunt is powered up.
 
-# Bit values for Register 40010 (status flags)
+# Bit values for Register 40017 (status flags)
 
 Returns a BIT value (on/off) for the following configuration items:
 

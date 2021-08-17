@@ -505,11 +505,15 @@ bool SetRegister(uint16_t address, uint16_t value)
   {
   case 4:
   case 6:
-  case 22:
-  case 24:
-  case 26:
-  case 28:
-  case 30:
+  //|40022|Fully charged voltage (4 byte double)
+  case 21:
+    //|40024|Tail current (Amps) (4 byte double)
+  case 23:
+  case 29:
+  case 31:
+  case 33:
+  case 35:
+  case 37:
   {
     //Set word[0] in preperation for the next register to be written
     newvalue.word[0] = value;
@@ -589,6 +593,7 @@ bool SetRegister(uint16_t address, uint16_t value)
   }
   case 19:
   {
+    //Register 40020
     registers.shunt_millivolt = value;
     CalculateLSB();
     break;
@@ -596,12 +601,40 @@ bool SetRegister(uint16_t address, uint16_t value)
 
   case 20:
   {
+    //|40021|Battery Capacity (ah)  (unsigned int16)
+    break;
+  }
+  case 22:
+  {
+    //|40023|Fully charged voltage
+    break;
+  }
+
+  case 24:
+  {
+    //|40025|Tail current (Amps)
+    break;
+  }
+  case 25:
+  {
+    //|40026|Charge efficiency factor % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 9561 = 95.61%)
+    break;
+  }
+  case 26:
+  {
+    //|40027|State of charge % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 8012 = 80.12%, 100 = 1.00%)
+    break;
+  }
+
+  case 27:
+  {
+    //Register 40028
     //SHUNT_CAL register
     registers.R_SHUNT_CAL = value;
     break;
   }
 
-  case 21:
+  case 28:
   {
     //temperature limit
     //Case unsigned to int16 to cope with negative temperatures
@@ -609,7 +642,7 @@ bool SetRegister(uint16_t address, uint16_t value)
     break;
   }
 
-  case 23:
+  case 30:
   {
     //Bus Overvoltage (overvoltage protection).
     //Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
@@ -620,7 +653,7 @@ bool SetRegister(uint16_t address, uint16_t value)
     break;
   }
 
-  case 25:
+  case 32:
   {
     //Bus under voltage
     newvalue.word[1] = value;
@@ -628,7 +661,7 @@ bool SetRegister(uint16_t address, uint16_t value)
     break;
   }
 
-  case 27:
+  case 34:
   {
     //Shunt Over Voltage Limit (current limit)
     newvalue.word[1] = value;
@@ -637,7 +670,7 @@ bool SetRegister(uint16_t address, uint16_t value)
     break;
   }
 
-  case 29:
+  case 36:
   {
     //Shunt UNDER Voltage Limit (under current limit)
     newvalue.word[1] = value;
@@ -645,7 +678,7 @@ bool SetRegister(uint16_t address, uint16_t value)
     break;
   }
 
-  case 31:
+  case 38:
   {
     //Shunt Over POWER LIMIT
     newvalue.word[1] = value;
@@ -653,14 +686,14 @@ bool SetRegister(uint16_t address, uint16_t value)
     break;
   }
 
-  case 32:
+  case 39:
   {
     //Shunt Temperature Coefficient
     registers.R_SHUNT_TEMPCO = value;
     break;
   }
 
-  case 38:
+  case 45:
   {
     //Watchdog timer trigger count (like error counter)
     wdt_triggered_count = value;
@@ -1190,19 +1223,61 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   case 20:
   {
+    //|40021|Battery Capacity (ah)  (unsigned int16)
+    return 0;
+    break;
+  }
+  case 21:
+  {
+    //|40022|Fully charged voltage (4 byte double)
+    return 0;
+    break;
+  }
+  case 22:
+  {
+    //|40023|Fully charged voltage
+    return 0;
+    break;
+  }
+  case 23:
+  {
+    //|40024|Tail current (Amps) (4 byte double)
+    return 0;
+    break;
+  }
+  case 24:
+  {
+    //|40025|Tail current (Amps)
+    return 0;
+    break;
+  }
+  case 25:
+  {
+    //|40026|Charge efficiency factor % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 9561 = 95.61%)
+    return 0;
+    break;
+  }
+  case 26:
+  {
+    //|40027|State of charge % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 8012 = 80.12%, 100 = 1.00%)
+    return 0;
+    break;
+  }
+  case 27:
+  {
     //SHUNT_CAL register
     return i2c_readword(INA_REGISTER::SHUNT_CAL);
     break;
   }
 
-  case 21:
+  case 28:
   {
     //temperature limit
     return (int16_t)TemperatureLimit();
     break;
   }
 
-  case 22:
+  case 29:
   {
     //Bus Overvoltage (overvoltage protection).
     //Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
@@ -1211,26 +1286,26 @@ uint16_t ReadHoldingRegister(uint16_t address)
     break;
   }
 
-  case 23:
+  case 30:
   {
     return BusOverVolt.word[1];
     break;
   }
 
-  case 24:
+  case 31:
   {
     BusUnderVolt.dblvalue = (double)i2c_readword(INA_REGISTER::BUVL) * 0.003125F;
     return BusUnderVolt.word[0];
     break;
   }
 
-  case 25:
+  case 32:
   {
     return BusUnderVolt.word[1];
     break;
   }
 
-  case 26:
+  case 33:
   {
     //Shunt Over Voltage Limit (current limit)
     int16_t value = i2c_readword(INA_REGISTER::SOVL);
@@ -1241,13 +1316,13 @@ uint16_t ReadHoldingRegister(uint16_t address)
     return ShuntOverCurrentLimit.word[0];
     break;
   }
-  case 27:
+  case 34:
   {
     return ShuntOverCurrentLimit.word[1];
     break;
   }
 
-  case 28:
+  case 35:
   {
     //Shunt UNDER Voltage Limit (under current limit)
     int16_t value = i2c_readword(INA_REGISTER::SUVL);
@@ -1260,13 +1335,13 @@ uint16_t ReadHoldingRegister(uint16_t address)
     return ShuntUnderCurrentLimit.word[0];
     break;
   }
-  case 29:
+  case 36:
   {
     return ShuntUnderCurrentLimit.word[1];
     break;
   }
 
-  case 30:
+  case 37:
   {
     //Shunt Over POWER LIMIT
     PowerLimit.dblvalue = (uint16_t)i2c_readword(INA_REGISTER::PWR_LIMIT);
@@ -1274,20 +1349,20 @@ uint16_t ReadHoldingRegister(uint16_t address)
     return PowerLimit.word[0];
     break;
   }
-  case 31:
+  case 38:
   {
     return PowerLimit.word[1];
     break;
   }
 
-  case 32:
+  case 39:
   {
     //Shunt Temperature Coefficient
     return (uint16_t)i2c_readword(INA_REGISTER::SHUNT_TEMPCO);
     break;
   }
 
-  case 33:
+  case 40:
   {
     //INAXXX chip model number (should always be 0x0228)
     uint16_t dieid = i2c_readword(INA_REGISTER::DIE_ID);
@@ -1298,96 +1373,96 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   //These settings would probably be better in a 0x2B function code
   //https://modbus.org/docs/Modbus_Application_Protocol_V1_1b.pdf
-  case 34:
+  case 41:
   {
     //GITHUB version
     return GIT_VERSION_B1;
     break;
   }
-  case 35:
+  case 42:
   {
     //GITHUB version
     return GIT_VERSION_B2;
     break;
   }
 
-  case 36:
+  case 43:
   {
     //COMPILE_DATE_TIME_EPOCH
     uint32_t x = COMPILE_DATE_TIME_UTC_EPOCH >> 16;
     return (uint16_t)x;
     break;
   }
-  case 37:
+  case 44:
   {
     //COMPILE_DATE_TIME_EPOCH
     return (uint16_t)COMPILE_DATE_TIME_UTC_EPOCH;
     break;
   }
-  case 38:
+  case 45:
   {
     //Watchdog timer trigger count (like error counter)
     return wdt_triggered_count;
     break;
   }
 
-  case 39:
+  case 46:
   {
     //40040
     return i2c_readword(INA_REGISTER::CONFIG);
     break;
   }
-  case 40:
+  case 47:
   {
     return i2c_readword(INA_REGISTER::ADC_CONFIG);
     break;
   }
-  case 41:
+  case 48:
   {
     return i2c_readword(INA_REGISTER::SHUNT_CAL);
     break;
   }
-  case 42:
+  case 49:
   {
     return i2c_readword(INA_REGISTER::SHUNT_TEMPCO);
     break;
   }
-  case 43:
+  case 50:
   {
     return i2c_readword(INA_REGISTER::DIAG_ALRT);
     break;
   }
-  case 44:
+  case 51:
   {
     return i2c_readword(INA_REGISTER::SOVL);
     break;
   }
-  case 45:
+  case 52:
   {
     return i2c_readword(INA_REGISTER::SUVL);
     break;
   }
-  case 46:
+  case 53:
   {
     return i2c_readword(INA_REGISTER::BOVL);
     break;
   }
-  case 47:
+  case 54:
   {
     return i2c_readword(INA_REGISTER::BUVL);
     break;
   }
-  case 48:
+  case 55:
   {
     return i2c_readword(INA_REGISTER::TEMP_LIMIT);
     break;
   }
-  case 49:
+  case 56:
   {
     return i2c_readword(INA_REGISTER::PWR_LIMIT);
     break;
   }
-  case 50:
+  case 57:
   {
     return i2c_readword(INA_REGISTER::DIETEMP);
     break;
