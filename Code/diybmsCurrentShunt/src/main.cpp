@@ -156,6 +156,27 @@ volatile bool wdt_triggered = false;
 volatile uint16_t wdt_triggered_count;
 volatile uint16_t SOC;
 
+uint16_t CalculateSOC()
+{
+  uint32_t milliamphour_out = charge_c_out * CoulombsToMilliAmpHours;
+  uint32_t milliamphour_in = ((charge_c_in * CoulombsToMilliAmpHours) / 100 * registers.charge_efficiency_factor);
+
+  //Allow negative numbers
+  int32_t milliamphour_batterycapacity = 1000 * registers.batterycapacity_amphour;
+  int32_t difference = milliamphour_in - milliamphour_out;
+
+  //Store result as fixed float point decimal
+  uint16_t SOC = 10000 * ((milliamphour_batterycapacity + difference) / milliamphour_batterycapacity);
+
+  //Add a hard limit, so user understands that the configuration needs review/change
+  if (SOC > 10500)
+  {
+    SOC = 10500;
+  }
+
+  return SOC;
+}
+
 void ConfigurePorts()
 {
   // PA1 = SDA
@@ -930,6 +951,7 @@ void setup()
     registers.relay_trigger_bitmap = ALL_ALERT_BITS;
   }
 
+  //100.00% at power on
   SOC = 100 * 100;
 
   //Flash LED to indicate normal boot up
@@ -1021,7 +1043,6 @@ double TemperatureLimit()
 {
   //Case unsigned to int16 to cope with negative temperatures
   double temp = (int16_t)i2c_readword(INA_REGISTER::TEMP_LIMIT);
-
   return temp * (double)0.0078125;
 }
 
@@ -1283,6 +1304,7 @@ uint16_t ReadHoldingRegister(uint16_t address)
   case 26:
   {
     //|40027|State of charge % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 8012 = 80.12%, 100 = 1.00%)
+    SOC = CalculateSOC();
     return SOC;
     break;
   }
