@@ -33,6 +33,9 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 // MODBUS Protocol
 // https://www.ni.com/en-gb/innovations/white-papers/14/the-modbus-protocol-in-depth.html
 
+//INA228 85-V, 20-Bit, Ultra-Precise Power/Energy/Charge Monitor
+//https://www.ti.com/lit/ds/symlink/ina228.pdf
+
 #if !defined(MODBUSDEFAULTBAUDRATE)
 #error MODBUSDEFAULTBAUDRATE must be defined
 #endif
@@ -96,8 +99,10 @@ const double full_scale_adc = 40.96;
 const double CoulombsToMilliAmpHours = 1.0 / 3.6;
 const uint8_t INA228_I2C_Address = B1000000;
 
-double charge_c_in = 0;
-double charge_c_out = 0;
+const uint16_t loop_delay_ms = 2000;
+
+uint32_t milliamphour_out = 0;
+uint32_t milliamphour_in = 0;
 
 uint16_t ModBusBaudRate = MODBUSDEFAULTBAUDRATE;
 
@@ -105,6 +110,9 @@ uint8_t ModbusSlaveAddress = MODBUSBASEADDRESS;
 
 volatile bool relay_state = false;
 volatile bool config_dirty = false;
+
+int32_t last_charge_coulombs = 0;
+uint16_t soc_reset_counter = 0;
 
 unsigned long timer = 0;
 
@@ -158,12 +166,10 @@ volatile uint16_t SOC;
 
 uint16_t CalculateSOC()
 {
-  uint32_t milliamphour_out = charge_c_out * CoulombsToMilliAmpHours;
-  uint32_t milliamphour_in = ((charge_c_in * CoulombsToMilliAmpHours) / 100 * registers.charge_efficiency_factor);
+  double milliamphour_in_scaled = ((double)milliamphour_in / 100.0) * registers.charge_efficiency_factor;
+  double milliamphour_batterycapacity = 1000.0 * (uint32_t)registers.batterycapacity_amphour;
 
-  //Allow negative numbers
-  int32_t milliamphour_batterycapacity = 1000 * registers.batterycapacity_amphour;
-  int32_t difference = milliamphour_in - milliamphour_out;
+  double difference = milliamphour_in_scaled - milliamphour_out;
 
   //Store result as fixed float point decimal
   uint16_t SOC = 10000 * ((milliamphour_batterycapacity + difference) / milliamphour_batterycapacity);
@@ -546,7 +552,7 @@ bool SetRegister(uint16_t address, uint16_t value)
     newvalue.word[0] = value;
     break;
   }
-
+    /*
   case 5:
   {
     //amphour_out
@@ -564,7 +570,7 @@ bool SetRegister(uint16_t address, uint16_t value)
     charge_c_in = x * CoulombsToMilliAmpHours;
     break;
   }
-
+*/
   case 9:
   {
     // Bit flags
@@ -951,8 +957,8 @@ void setup()
     registers.relay_trigger_bitmap = ALL_ALERT_BITS;
   }
 
-  //100.00% at power on
-  SOC = 100 * 100;
+  //0% at power on
+  SOC = 0;
 
   //Flash LED to indicate normal boot up
   for (size_t i = 0; i < 6; i++)
@@ -990,16 +996,17 @@ void setup()
   modbus_configure(&Serial, ModBusBaudRate);
 }
 
+//Bus voltage output. Two's complement value, however always positive.  Value in bits 23 to 4
 double BusVoltage()
 {
-  //Bus voltage output. Two's complement value, however always positive.  Value in bits 23 to 4
+
   //195.3125uV per LSB
   return (double)195.3125 * (double)i2c_readInt24(INA_REGISTER::VBUS) / 1000000.0;
 }
 
+//Shunt voltage in MILLIVOLTS mV (Two's complement value)
 double ShuntVoltage()
 {
-  //Shunt voltage in MILLIVOLTS mV (Two's complement value)
   //78.125 nV/LSB
   return (double)78.125 * (double)i2c_readInt24(INA_REGISTER::VSHUNT) / 1e+6;
 }
@@ -1012,24 +1019,24 @@ double Energy()
 }
 
 // Charge in Coulombs
-int64_t RawCharge()
+int32_t ChargeInCoulombsAsInt()
 {
-  return i2c_readInt40(INA_REGISTER::CHARGE);
+  //Calculated charge output. Output value is in Coulombs.Two's complement value.  40bit number
+  //int64 on an 8 bit micro!
+  return registers.CURRENT_LSB * (double)i2c_readInt40(INA_REGISTER::CHARGE);
 }
 
+//Calculated power output.  Output value in watts. Unsigned representation. Positive value.
 double Power()
 {
-  //Calculated power output.
-  //Output value in watts.
-  //Unsigned representation. Positive value.
   //POWER Power [W] = 3.2 x CURRENT_LSB x POWER
   return (double)i2c_readUint24(INA_REGISTER::POWER) * (double)3.2 * registers.CURRENT_LSB;
 }
 
+//The INA228 device has an internal temperature sensor which can measure die temperature from –40 °C to +125°C.
 double DieTemperature()
 {
-  //The INA228 device has an internal temperature sensor which can measure die temperature from –40 °C to +125
-  //°C. The accuracy of the temperature sensor is ±2 °C across the operational temperature range. The temperature
+  //The accuracy of the temperature sensor is ±2 °C across the operational temperature range. The temperature
   //value is stored inside the DIETEMP register and can be read through the digital interface
   //Internal die temperature measurement. Two's complement value. Conversion factor: 7.8125 m°C/LSB
 
@@ -1046,11 +1053,13 @@ double TemperatureLimit()
   return temp * (double)0.0078125;
 }
 
+//Calculated current output in Amperes.
+//In the way this circuit is designed, NEGATIVE current indicates DISCHARGE of the battery
+//POSITIVE current indicates CHARGE of the battery
 double Current()
 {
-  //Current.
-  //Calculated current output in Amperes. Two's complement value.
-  return registers.CURRENT_LSB * (double)i2c_readInt24(INA_REGISTER::CURRENT);
+  //Current. Two's complement value.
+  return -(registers.CURRENT_LSB * (double)i2c_readInt24(INA_REGISTER::CURRENT));
 }
 
 ISR(PORTB_PORT_vect)
@@ -1113,9 +1122,6 @@ uint16_t ReadHoldingRegister(uint16_t address)
   static DoubleUnionType ShuntUnderCurrentLimit;
   static DoubleUnionType PowerLimit;
 
-  static uint32_t milliamphour_out;
-  static uint32_t milliamphour_in;
-
   static DoubleUnionType copy_current_lsb;
   static DoubleUnionType copy_shunt_resistance;
   static DoubleUnionType copy_fully_charged_voltage;
@@ -1156,7 +1162,6 @@ uint16_t ReadHoldingRegister(uint16_t address)
   case 4:
   {
     //milliamphour_out
-    milliamphour_out = charge_c_out * CoulombsToMilliAmpHours;
     return (uint16_t)(milliamphour_out >> 16);
     break;
   }
@@ -1171,7 +1176,6 @@ uint16_t ReadHoldingRegister(uint16_t address)
   case 6:
   {
     //milliamphour_in
-    milliamphour_in = charge_c_in * CoulombsToMilliAmpHours;
     return (uint16_t)(milliamphour_in >> 16);
     break;
   }
@@ -1518,8 +1522,6 @@ uint16_t ReadHoldingRegister(uint16_t address)
   return 0;
 }
 
-double last_charge_coulombs = 0;
-
 void loop()
 {
   wdt_reset();
@@ -1584,51 +1586,83 @@ void loop()
 
     RedLED(true);
 
-    //Do it again in 2.5 seconds
-    timer = millis() + 2500;
+    //Do it again in X seconds
+    timer = millis() + loop_delay_ms;
 
-    //double voltage = BusVoltage();
-    //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
-    //double current = Current();
+    double voltage = BusVoltage();
+    double current = Current();
 
-    //Power is always a positive number
-    double power = Power();
-    //double temperature = DieTemperature();
-    //double shuntv = ShuntVoltage();
-    //double energy_joules = Energy();
+    //We amp-hour count using units of 18 coulombs = 5mAh, to avoid rounding issues
 
-    //int64 on an 8 bit micro!
-    int64_t charge_raw = RawCharge();
-
-    double charge_coulombs = registers.CURRENT_LSB * charge_raw;
-
-    double difference = charge_coulombs - last_charge_coulombs;
-
-    //amphour_out = charge_coulombs * CoulombsToAmpHours;
-
-    //If we don't have a power reading, ignore the coulombs - also means
+    //If we don't have a voltage reading, ignore the coulombs - also means
     //Ah counting won't work without voltage reading on the INA228 chip
-    if (power > 0)
+    if (voltage > 0)
     {
-      if (difference > 0)
+      int32_t charge_coulombs = ChargeInCoulombsAsInt();
+      int32_t difference = charge_coulombs - last_charge_coulombs;
+
+      //Have we used up more than 5mAh of energy?
+      //if not, ignore for now and await next cycle
+      if (abs(difference) >= 18)
       {
-        charge_c_out += difference;
-      }
-      else
-      {
-        charge_c_in += abs(difference);
+        if (difference > 0)
+        {
+          //Amp hour out
+          //Integer divide (18 coulombs)
+          int32_t integer_divide = (difference / 18);
+          //Subtract remainder
+          last_charge_coulombs = charge_coulombs - (difference - (integer_divide * 18));
+          //Chunks of 5mAh
+          milliamphour_out += integer_divide * 5;
+        }
+        else
+        {
+          //Make it positive, for counting amp hour in
+          difference = abs(difference);
+          int32_t integer_divide = (difference / 18);
+          //Add on remainder
+          last_charge_coulombs = charge_coulombs + (difference - (integer_divide * 18));
+          //chunks of 5mAh
+          milliamphour_in += integer_divide * 5;
+        }
       }
     }
-
-    last_charge_coulombs = charge_coulombs;
 
     //Periodically we need to reset the energy register to prevent it overflowing
     //if we do this too frequently we get incorrect readings over the long term
     //360000 = 100Amp Hour
-    if (last_charge_coulombs > 360000.0)
+    if (last_charge_coulombs > 360000)
     {
       ResetChargeEnergyRegisters();
       last_charge_coulombs = 0;
+    }
+
+    //Now to test if we need to reset SOC to 100% ?
+    //Check if voltage is over the fully_charged_voltage and current UNDER tail_current_amps
+    if (voltage >= registers.fully_charged_voltage && current < registers.tail_current_amps && current > 0)
+    {
+      //Fully charged, waiting condition is true so increment time count
+      soc_reset_counter++;
+
+      // Test if counter has reached 3 minutes, indicating fully charge battery
+      if (soc_reset_counter >= ((3 * 60 * 1000) / loop_delay_ms))
+      {
+        //Now we reset the SOC, by clearing the registers, at this point SOC returns to 100%
+
+        //This does have an annoying "feature" of clearing down todays AH counts :-(
+        //TODO: FIX THIS - probably need a set of shadow variables to hold the internal SOC and AH counts
+
+        ResetChargeEnergyRegisters();
+        last_charge_coulombs = 0;
+        milliamphour_in = 0;
+        milliamphour_out = 0;
+        soc_reset_counter = 0;
+      }
+    }
+    else
+    {
+      //Voltage or current is out side of monitoring limits, so reset timer count
+      soc_reset_counter = 0;
     }
 
     if (alert == 0)
