@@ -111,8 +111,9 @@ uint8_t ModbusSlaveAddress = MODBUSBASEADDRESS;
 volatile bool relay_state = false;
 volatile bool config_dirty = false;
 
+uint8_t max_soc_reset_counter = 0;
+uint8_t soc_reset_counter = 0;
 int32_t last_charge_coulombs = 0;
-uint16_t soc_reset_counter = 0;
 
 unsigned long timer = 0;
 
@@ -230,7 +231,6 @@ void ReadJumperPins()
   bool AddressJumper = (PORTA.IN & PIN4_bm);
 
   //TODO: Do something with the above jumper settings
-
   if (BaudRateJumper == false)
   {
     //Half the default baud rate if the jumper is connected, so 19200 goes to 9600
@@ -481,11 +481,12 @@ void __attribute__((noreturn)) blinkPattern(uint32_t pattern)
 void ResetChargeEnergyRegisters()
 {
   //BIT 14
+  //RSTACC
   //Resets the contents of accumulation registers ENERGY and CHARGE to 0
   //0h = Normal Operation
   //1h = Clears registers to default values for ENERGY and CHARGE registers
 
-  if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG | 0x1000))
+  if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG | (uint16_t)_BV(14)))
   {
     blinkPattern(err_ResetChargeEnergyRegisters);
   }
@@ -688,7 +689,6 @@ bool SetRegister(uint16_t address, uint16_t value)
     //BusOverVolt.dblvalue = ((double)(uint16_t)i2c_readword(INA_REGISTER::BOVL)) * 0.003125F;
     newvalue.word[1] = value;
     registers.R_BOVL = newvalue.dblvalue / 0.003125F;
-    //TODO: Save the new value
     break;
   }
 
@@ -1018,7 +1018,10 @@ double Energy()
   return 16.0 * 3.2 * registers.CURRENT_LSB * energy;
 }
 
-// Charge in Coulombs
+// Charge in Coulombs.
+// The raw value is 40 bit, but we frequently reset this back to zero so it prevents
+// overflow and keeps inside the int32 limits
+// NEGATIVE value means battery is being charged
 int32_t ChargeInCoulombsAsInt()
 {
   //Calculated charge output. Output value is in Coulombs.Two's complement value.  40bit number
@@ -1631,7 +1634,7 @@ void loop()
     //Periodically we need to reset the energy register to prevent it overflowing
     //if we do this too frequently we get incorrect readings over the long term
     //360000 = 100Amp Hour
-    if (last_charge_coulombs > 360000)
+    if (abs(last_charge_coulombs) > (int32_t)360000)
     {
       ResetChargeEnergyRegisters();
       last_charge_coulombs = 0;
@@ -1639,19 +1642,21 @@ void loop()
 
     //Now to test if we need to reset SOC to 100% ?
     //Check if voltage is over the fully_charged_voltage and current UNDER tail_current_amps
-    if (voltage >= registers.fully_charged_voltage && current < registers.tail_current_amps && current > 0)
+    if (voltage > registers.fully_charged_voltage && current > 0 && current < registers.tail_current_amps)
     {
-      //Fully charged, waiting condition is true so increment time count
+      //Battery has reached fully charged so wait for time counter
       soc_reset_counter++;
 
       // Test if counter has reached 3 minutes, indicating fully charge battery
-      if (soc_reset_counter >= ((3 * 60 * 1000) / loop_delay_ms))
+      if (soc_reset_counter >= ((3 * 60) / (loop_delay_ms/1000)))
       {
         //Now we reset the SOC, by clearing the registers, at this point SOC returns to 100%
 
         //This does have an annoying "feature" of clearing down todays AH counts :-(
         //TODO: FIX THIS - probably need a set of shadow variables to hold the internal SOC and AH counts
+        //                 but then when/how do we reset the Ah counts?
 
+        max_soc_reset_counter = soc_reset_counter;
         ResetChargeEnergyRegisters();
         last_charge_coulombs = 0;
         milliamphour_in = 0;
@@ -1669,6 +1674,7 @@ void loop()
     {
       //Turn LED off if alert is not active
       RedLED(false);
-    }
-  }
+    } //end if
+
+  } //end if
 }
