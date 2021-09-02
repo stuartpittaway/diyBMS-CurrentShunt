@@ -33,6 +33,9 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 // MODBUS Protocol
 // https://www.ni.com/en-gb/innovations/white-papers/14/the-modbus-protocol-in-depth.html
 
+//INA228 85-V, 20-Bit, Ultra-Precise Power/Energy/Charge Monitor
+//https://www.ti.com/lit/ds/symlink/ina228.pdf
+
 #if !defined(MODBUSDEFAULTBAUDRATE)
 #error MODBUSDEFAULTBAUDRATE must be defined
 #endif
@@ -96,8 +99,10 @@ const double full_scale_adc = 40.96;
 const double CoulombsToMilliAmpHours = 1.0 / 3.6;
 const uint8_t INA228_I2C_Address = B1000000;
 
-double charge_c_in = 0;
-double charge_c_out = 0;
+const uint16_t loop_delay_ms = 2000;
+
+uint32_t milliamphour_out = 0;
+uint32_t milliamphour_in = 0;
 
 uint16_t ModBusBaudRate = MODBUSDEFAULTBAUDRATE;
 
@@ -105,6 +110,10 @@ uint8_t ModbusSlaveAddress = MODBUSBASEADDRESS;
 
 volatile bool relay_state = false;
 volatile bool config_dirty = false;
+
+uint8_t max_soc_reset_counter = 0;
+uint8_t soc_reset_counter = 0;
+int32_t last_charge_coulombs = 0;
 
 unsigned long timer = 0;
 
@@ -140,6 +149,11 @@ struct eeprom_regs
   double full_scale_current;
   double CURRENT_LSB;
   double RSHUNT;
+
+  uint16_t batterycapacity_amphour;
+  double fully_charged_voltage;
+  double tail_current_amps;
+  double charge_efficiency_factor;
 };
 
 eeprom_regs registers;
@@ -149,6 +163,26 @@ uint16_t alert = 0;
 
 volatile bool wdt_triggered = false;
 volatile uint16_t wdt_triggered_count;
+volatile uint16_t SOC;
+
+uint16_t CalculateSOC()
+{
+  double milliamphour_in_scaled = ((double)milliamphour_in / 100.0) * registers.charge_efficiency_factor;
+  double milliamphour_batterycapacity = 1000.0 * (uint32_t)registers.batterycapacity_amphour;
+
+  double difference = milliamphour_in_scaled - milliamphour_out;
+
+  //Store result as fixed float point decimal
+  uint16_t SOC = 10000 * ((milliamphour_batterycapacity + difference) / milliamphour_batterycapacity);
+
+  //Add a hard limit, so user understands that the configuration needs review/change
+  if (SOC > 10500)
+  {
+    SOC = 10500;
+  }
+
+  return SOC;
+}
 
 void ConfigurePorts()
 {
@@ -197,7 +231,6 @@ void ReadJumperPins()
   bool AddressJumper = (PORTA.IN & PIN4_bm);
 
   //TODO: Do something with the above jumper settings
-
   if (BaudRateJumper == false)
   {
     //Half the default baud rate if the jumper is connected, so 19200 goes to 9600
@@ -448,11 +481,12 @@ void __attribute__((noreturn)) blinkPattern(uint32_t pattern)
 void ResetChargeEnergyRegisters()
 {
   //BIT 14
+  //RSTACC
   //Resets the contents of accumulation registers ENERGY and CHARGE to 0
   //0h = Normal Operation
   //1h = Clears registers to default values for ENERGY and CHARGE registers
 
-  if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG | 0x1000))
+  if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG | (uint16_t)_BV(14)))
   {
     blinkPattern(err_ResetChargeEnergyRegisters);
   }
@@ -505,17 +539,21 @@ bool SetRegister(uint16_t address, uint16_t value)
   {
   case 4:
   case 6:
-  case 22:
-  case 24:
-  case 26:
-  case 28:
-  case 30:
+  //|40022|Fully charged voltage (4 byte double)
+  case 21:
+    //|40024|Tail current (Amps) (4 byte double)
+  case 23:
+  case 29:
+  case 31:
+  case 33:
+  case 35:
+  case 37:
   {
     //Set word[0] in preperation for the next register to be written
     newvalue.word[0] = value;
     break;
   }
-
+    /*
   case 5:
   {
     //amphour_out
@@ -533,7 +571,7 @@ bool SetRegister(uint16_t address, uint16_t value)
     charge_c_in = x * CoulombsToMilliAmpHours;
     break;
   }
-
+*/
   case 9:
   {
     // Bit flags
@@ -577,7 +615,6 @@ bool SetRegister(uint16_t address, uint16_t value)
 
     //Set CONFIG and ADC_CONFIG
     SetINA228ConfigurationRegisters();
-
     break;
   }
 
@@ -589,6 +626,7 @@ bool SetRegister(uint16_t address, uint16_t value)
   }
   case 19:
   {
+    //Register 40020
     registers.shunt_millivolt = value;
     CalculateLSB();
     break;
@@ -596,12 +634,47 @@ bool SetRegister(uint16_t address, uint16_t value)
 
   case 20:
   {
+    //|40021|Battery Capacity (ah)  (unsigned int16)
+    registers.batterycapacity_amphour = value;
+    break;
+  }
+  case 22:
+  {
+    //|40023|Fully charged voltage
+    newvalue.word[1] = value;
+    registers.fully_charged_voltage = newvalue.dblvalue;
+    break;
+  }
+
+  case 24:
+  {
+    //|40025|Tail current (Amps)
+    newvalue.word[1] = value;
+    registers.tail_current_amps = newvalue.dblvalue;
+    break;
+  }
+  case 25:
+  {
+    //|40026|Charge efficiency factor % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 9561 = 95.61%)
+    registers.charge_efficiency_factor = ((double)value) / 100.0;
+    break;
+  }
+    //case 26:
+    //{
+    //|40027|State of charge % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 8012 = 80.12%, 100 = 1.00%)
+    //registers.batterycapacity_amphour = value;
+    //break;
+    //}
+
+  case 27:
+  {
+    //Register 40028
     //SHUNT_CAL register
     registers.R_SHUNT_CAL = value;
     break;
   }
 
-  case 21:
+  case 28:
   {
     //temperature limit
     //Case unsigned to int16 to cope with negative temperatures
@@ -609,18 +682,17 @@ bool SetRegister(uint16_t address, uint16_t value)
     break;
   }
 
-  case 23:
+  case 30:
   {
     //Bus Overvoltage (overvoltage protection).
     //Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
     //BusOverVolt.dblvalue = ((double)(uint16_t)i2c_readword(INA_REGISTER::BOVL)) * 0.003125F;
     newvalue.word[1] = value;
     registers.R_BOVL = newvalue.dblvalue / 0.003125F;
-    //TODO: Save the new value
     break;
   }
 
-  case 25:
+  case 32:
   {
     //Bus under voltage
     newvalue.word[1] = value;
@@ -628,7 +700,7 @@ bool SetRegister(uint16_t address, uint16_t value)
     break;
   }
 
-  case 27:
+  case 34:
   {
     //Shunt Over Voltage Limit (current limit)
     newvalue.word[1] = value;
@@ -637,7 +709,7 @@ bool SetRegister(uint16_t address, uint16_t value)
     break;
   }
 
-  case 29:
+  case 36:
   {
     //Shunt UNDER Voltage Limit (under current limit)
     newvalue.word[1] = value;
@@ -645,7 +717,7 @@ bool SetRegister(uint16_t address, uint16_t value)
     break;
   }
 
-  case 31:
+  case 38:
   {
     //Shunt Over POWER LIMIT
     newvalue.word[1] = value;
@@ -653,14 +725,14 @@ bool SetRegister(uint16_t address, uint16_t value)
     break;
   }
 
-  case 32:
+  case 39:
   {
     //Shunt Temperature Coefficient
     registers.R_SHUNT_TEMPCO = value;
     break;
   }
 
-  case 38:
+  case 45:
   {
     //Watchdog timer trigger count (like error counter)
     wdt_triggered_count = value;
@@ -856,6 +928,11 @@ void setup()
     registers.shunt_max_current = 150;
     registers.shunt_millivolt = 50;
 
+    registers.batterycapacity_amphour = 200;
+    registers.fully_charged_voltage = 52.8;
+    registers.tail_current_amps = 5;
+    registers.charge_efficiency_factor = 99.5;
+
     //SLOWALERT = Wait for full sample averaging time before triggering alert (about 1.5 seconds)
     registers.R_DIAG_ALRT = bit(DIAG_ALRT_FIELD::SLOWALERT);
 
@@ -879,6 +956,9 @@ void setup()
     //By default, trigger relay on all alerts
     registers.relay_trigger_bitmap = ALL_ALERT_BITS;
   }
+
+  //0% at power on
+  SOC = 0;
 
   //Flash LED to indicate normal boot up
   for (size_t i = 0; i < 6; i++)
@@ -916,16 +996,17 @@ void setup()
   modbus_configure(&Serial, ModBusBaudRate);
 }
 
+//Bus voltage output. Two's complement value, however always positive.  Value in bits 23 to 4
 double BusVoltage()
 {
-  //Bus voltage output. Two's complement value, however always positive.  Value in bits 23 to 4
+
   //195.3125uV per LSB
   return (double)195.3125 * (double)i2c_readInt24(INA_REGISTER::VBUS) / 1000000.0;
 }
 
+//Shunt voltage in MILLIVOLTS mV (Two's complement value)
 double ShuntVoltage()
 {
-  //Shunt voltage in MILLIVOLTS mV (Two's complement value)
   //78.125 nV/LSB
   return (double)78.125 * (double)i2c_readInt24(INA_REGISTER::VSHUNT) / 1e+6;
 }
@@ -937,25 +1018,28 @@ double Energy()
   return 16.0 * 3.2 * registers.CURRENT_LSB * energy;
 }
 
-// Charge in Coulombs
-int64_t RawCharge()
+// Charge in Coulombs.
+// The raw value is 40 bit, but we frequently reset this back to zero so it prevents
+// overflow and keeps inside the int32 limits
+// NEGATIVE value means battery is being charged
+int32_t ChargeInCoulombsAsInt()
 {
-  return i2c_readInt40(INA_REGISTER::CHARGE);
+  //Calculated charge output. Output value is in Coulombs.Two's complement value.  40bit number
+  //int64 on an 8 bit micro!
+  return registers.CURRENT_LSB * (double)i2c_readInt40(INA_REGISTER::CHARGE);
 }
 
+//Calculated power output.  Output value in watts. Unsigned representation. Positive value.
 double Power()
 {
-  //Calculated power output.
-  //Output value in watts.
-  //Unsigned representation. Positive value.
   //POWER Power [W] = 3.2 x CURRENT_LSB x POWER
   return (double)i2c_readUint24(INA_REGISTER::POWER) * (double)3.2 * registers.CURRENT_LSB;
 }
 
+//The INA228 device has an internal temperature sensor which can measure die temperature from –40 °C to +125°C.
 double DieTemperature()
 {
-  //The INA228 device has an internal temperature sensor which can measure die temperature from –40 °C to +125
-  //°C. The accuracy of the temperature sensor is ±2 °C across the operational temperature range. The temperature
+  //The accuracy of the temperature sensor is ±2 °C across the operational temperature range. The temperature
   //value is stored inside the DIETEMP register and can be read through the digital interface
   //Internal die temperature measurement. Two's complement value. Conversion factor: 7.8125 m°C/LSB
 
@@ -969,15 +1053,16 @@ double TemperatureLimit()
 {
   //Case unsigned to int16 to cope with negative temperatures
   double temp = (int16_t)i2c_readword(INA_REGISTER::TEMP_LIMIT);
-
   return temp * (double)0.0078125;
 }
 
+//Calculated current output in Amperes.
+//In the way this circuit is designed, NEGATIVE current indicates DISCHARGE of the battery
+//POSITIVE current indicates CHARGE of the battery
 double Current()
 {
-  //Current.
-  //Calculated current output in Amperes. Two's complement value.
-  return registers.CURRENT_LSB * (double)i2c_readInt24(INA_REGISTER::CURRENT);
+  //Current. Two's complement value.
+  return -(registers.CURRENT_LSB * (double)i2c_readInt24(INA_REGISTER::CURRENT));
 }
 
 ISR(PORTB_PORT_vect)
@@ -1040,11 +1125,10 @@ uint16_t ReadHoldingRegister(uint16_t address)
   static DoubleUnionType ShuntUnderCurrentLimit;
   static DoubleUnionType PowerLimit;
 
-  static uint32_t milliamphour_out;
-  static uint32_t milliamphour_in;
-
   static DoubleUnionType copy_current_lsb;
   static DoubleUnionType copy_shunt_resistance;
+  static DoubleUnionType copy_fully_charged_voltage;
+  static DoubleUnionType copy_tail_current_amps;
 
   switch (address)
   {
@@ -1081,7 +1165,6 @@ uint16_t ReadHoldingRegister(uint16_t address)
   case 4:
   {
     //milliamphour_out
-    milliamphour_out = charge_c_out * CoulombsToMilliAmpHours;
     return (uint16_t)(milliamphour_out >> 16);
     break;
   }
@@ -1096,7 +1179,6 @@ uint16_t ReadHoldingRegister(uint16_t address)
   case 6:
   {
     //milliamphour_in
-    milliamphour_in = charge_c_in * CoulombsToMilliAmpHours;
     return (uint16_t)(milliamphour_in >> 16);
     break;
   }
@@ -1190,19 +1272,64 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   case 20:
   {
+    //|40021|Battery Capacity (ah)  (unsigned int16)
+    return registers.batterycapacity_amphour;
+    break;
+  }
+  case 21:
+  {
+    //|40022|Fully charged voltage (4 byte double)
+    copy_fully_charged_voltage.dblvalue = registers.fully_charged_voltage;
+    return copy_fully_charged_voltage.word[0];
+    break;
+  }
+  case 22:
+  {
+    //|40023|Fully charged voltage
+    return copy_fully_charged_voltage.word[1];
+    break;
+  }
+  case 23:
+  {
+    //|40024|Tail current (Amps) (4 byte double)
+    copy_tail_current_amps.dblvalue = registers.tail_current_amps;
+    return copy_tail_current_amps.word[0];
+    break;
+  }
+  case 24:
+  {
+    //|40025|Tail current (Amps)
+    return copy_tail_current_amps.word[1];
+    break;
+  }
+  case 25:
+  {
+    //|40026|Charge efficiency factor % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 9561 = 95.61%)
+    return (uint16_t)(registers.charge_efficiency_factor * 100.0);
+    break;
+  }
+  case 26:
+  {
+    //|40027|State of charge % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 8012 = 80.12%, 100 = 1.00%)
+    SOC = CalculateSOC();
+    return SOC;
+    break;
+  }
+  case 27:
+  {
     //SHUNT_CAL register
     return i2c_readword(INA_REGISTER::SHUNT_CAL);
     break;
   }
 
-  case 21:
+  case 28:
   {
     //temperature limit
     return (int16_t)TemperatureLimit();
     break;
   }
 
-  case 22:
+  case 29:
   {
     //Bus Overvoltage (overvoltage protection).
     //Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
@@ -1211,26 +1338,26 @@ uint16_t ReadHoldingRegister(uint16_t address)
     break;
   }
 
-  case 23:
+  case 30:
   {
     return BusOverVolt.word[1];
     break;
   }
 
-  case 24:
+  case 31:
   {
     BusUnderVolt.dblvalue = (double)i2c_readword(INA_REGISTER::BUVL) * 0.003125F;
     return BusUnderVolt.word[0];
     break;
   }
 
-  case 25:
+  case 32:
   {
     return BusUnderVolt.word[1];
     break;
   }
 
-  case 26:
+  case 33:
   {
     //Shunt Over Voltage Limit (current limit)
     int16_t value = i2c_readword(INA_REGISTER::SOVL);
@@ -1241,13 +1368,13 @@ uint16_t ReadHoldingRegister(uint16_t address)
     return ShuntOverCurrentLimit.word[0];
     break;
   }
-  case 27:
+  case 34:
   {
     return ShuntOverCurrentLimit.word[1];
     break;
   }
 
-  case 28:
+  case 35:
   {
     //Shunt UNDER Voltage Limit (under current limit)
     int16_t value = i2c_readword(INA_REGISTER::SUVL);
@@ -1260,13 +1387,13 @@ uint16_t ReadHoldingRegister(uint16_t address)
     return ShuntUnderCurrentLimit.word[0];
     break;
   }
-  case 29:
+  case 36:
   {
     return ShuntUnderCurrentLimit.word[1];
     break;
   }
 
-  case 30:
+  case 37:
   {
     //Shunt Over POWER LIMIT
     PowerLimit.dblvalue = (uint16_t)i2c_readword(INA_REGISTER::PWR_LIMIT);
@@ -1274,20 +1401,20 @@ uint16_t ReadHoldingRegister(uint16_t address)
     return PowerLimit.word[0];
     break;
   }
-  case 31:
+  case 38:
   {
     return PowerLimit.word[1];
     break;
   }
 
-  case 32:
+  case 39:
   {
     //Shunt Temperature Coefficient
     return (uint16_t)i2c_readword(INA_REGISTER::SHUNT_TEMPCO);
     break;
   }
 
-  case 33:
+  case 40:
   {
     //INAXXX chip model number (should always be 0x0228)
     uint16_t dieid = i2c_readword(INA_REGISTER::DIE_ID);
@@ -1298,96 +1425,96 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   //These settings would probably be better in a 0x2B function code
   //https://modbus.org/docs/Modbus_Application_Protocol_V1_1b.pdf
-  case 34:
+  case 41:
   {
     //GITHUB version
     return GIT_VERSION_B1;
     break;
   }
-  case 35:
+  case 42:
   {
     //GITHUB version
     return GIT_VERSION_B2;
     break;
   }
 
-  case 36:
+  case 43:
   {
     //COMPILE_DATE_TIME_EPOCH
     uint32_t x = COMPILE_DATE_TIME_UTC_EPOCH >> 16;
     return (uint16_t)x;
     break;
   }
-  case 37:
+  case 44:
   {
     //COMPILE_DATE_TIME_EPOCH
     return (uint16_t)COMPILE_DATE_TIME_UTC_EPOCH;
     break;
   }
-  case 38:
+  case 45:
   {
     //Watchdog timer trigger count (like error counter)
     return wdt_triggered_count;
     break;
   }
 
-  case 39:
+  case 46:
   {
     //40040
     return i2c_readword(INA_REGISTER::CONFIG);
     break;
   }
-  case 40:
+  case 47:
   {
     return i2c_readword(INA_REGISTER::ADC_CONFIG);
     break;
   }
-  case 41:
+  case 48:
   {
     return i2c_readword(INA_REGISTER::SHUNT_CAL);
     break;
   }
-  case 42:
+  case 49:
   {
     return i2c_readword(INA_REGISTER::SHUNT_TEMPCO);
     break;
   }
-  case 43:
+  case 50:
   {
     return i2c_readword(INA_REGISTER::DIAG_ALRT);
     break;
   }
-  case 44:
+  case 51:
   {
     return i2c_readword(INA_REGISTER::SOVL);
     break;
   }
-  case 45:
+  case 52:
   {
     return i2c_readword(INA_REGISTER::SUVL);
     break;
   }
-  case 46:
+  case 53:
   {
     return i2c_readword(INA_REGISTER::BOVL);
     break;
   }
-  case 47:
+  case 54:
   {
     return i2c_readword(INA_REGISTER::BUVL);
     break;
   }
-  case 48:
+  case 55:
   {
     return i2c_readword(INA_REGISTER::TEMP_LIMIT);
     break;
   }
-  case 49:
+  case 56:
   {
     return i2c_readword(INA_REGISTER::PWR_LIMIT);
     break;
   }
-  case 50:
+  case 57:
   {
     return i2c_readword(INA_REGISTER::DIETEMP);
     break;
@@ -1397,8 +1524,6 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   return 0;
 }
-
-double last_charge_coulombs = 0;
 
 void loop()
 {
@@ -1464,57 +1589,92 @@ void loop()
 
     RedLED(true);
 
-    //Do it again in 2.5 seconds
-    timer = millis() + 2500;
+    //Do it again in X seconds
+    timer = millis() + loop_delay_ms;
 
-    //double voltage = BusVoltage();
-    //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
-    //double current = Current();
+    double voltage = BusVoltage();
+    double current = Current();
 
-    //Power is always a positive number
-    double power = Power();
-    //double temperature = DieTemperature();
-    //double shuntv = ShuntVoltage();
-    //double energy_joules = Energy();
+    //We amp-hour count using units of 18 coulombs = 5mAh, to avoid rounding issues
 
-    //int64 on an 8 bit micro!
-    int64_t charge_raw = RawCharge();
-
-    double charge_coulombs = registers.CURRENT_LSB * charge_raw;
-
-    double difference = charge_coulombs - last_charge_coulombs;
-
-    //amphour_out = charge_coulombs * CoulombsToAmpHours;
-
-    //If we don't have a power reading, ignore the coulombs - also means
+    //If we don't have a voltage reading, ignore the coulombs - also means
     //Ah counting won't work without voltage reading on the INA228 chip
-    if (power > 0)
+    if (voltage > 0)
     {
-      if (difference > 0)
+      int32_t charge_coulombs = ChargeInCoulombsAsInt();
+      int32_t difference = charge_coulombs - last_charge_coulombs;
+
+      //Have we used up more than 5mAh of energy?
+      //if not, ignore for now and await next cycle
+      if (abs(difference) >= 18)
       {
-        charge_c_out += difference;
-      }
-      else
-      {
-        charge_c_in += abs(difference);
+        if (difference > 0)
+        {
+          //Amp hour out
+          //Integer divide (18 coulombs)
+          int32_t integer_divide = (difference / 18);
+          //Subtract remainder
+          last_charge_coulombs = charge_coulombs - (difference - (integer_divide * 18));
+          //Chunks of 5mAh
+          milliamphour_out += integer_divide * 5;
+        }
+        else
+        {
+          //Make it positive, for counting amp hour in
+          difference = abs(difference);
+          int32_t integer_divide = (difference / 18);
+          //Add on remainder
+          last_charge_coulombs = charge_coulombs + (difference - (integer_divide * 18));
+          //chunks of 5mAh
+          milliamphour_in += integer_divide * 5;
+        }
       }
     }
-
-    last_charge_coulombs = charge_coulombs;
 
     //Periodically we need to reset the energy register to prevent it overflowing
     //if we do this too frequently we get incorrect readings over the long term
     //360000 = 100Amp Hour
-    if (last_charge_coulombs > 360000.0)
+    if (abs(last_charge_coulombs) > (int32_t)360000)
     {
       ResetChargeEnergyRegisters();
       last_charge_coulombs = 0;
+    }
+
+    //Now to test if we need to reset SOC to 100% ?
+    //Check if voltage is over the fully_charged_voltage and current UNDER tail_current_amps
+    if (voltage > registers.fully_charged_voltage && current > 0 && current < registers.tail_current_amps)
+    {
+      //Battery has reached fully charged so wait for time counter
+      soc_reset_counter++;
+
+      // Test if counter has reached 3 minutes, indicating fully charge battery
+      if (soc_reset_counter >= ((3 * 60) / (loop_delay_ms/1000)))
+      {
+        //Now we reset the SOC, by clearing the registers, at this point SOC returns to 100%
+
+        //This does have an annoying "feature" of clearing down todays AH counts :-(
+        //TODO: FIX THIS - probably need a set of shadow variables to hold the internal SOC and AH counts
+        //                 but then when/how do we reset the Ah counts?
+
+        max_soc_reset_counter = soc_reset_counter;
+        ResetChargeEnergyRegisters();
+        last_charge_coulombs = 0;
+        milliamphour_in = 0;
+        milliamphour_out = 0;
+        soc_reset_counter = 0;
+      }
+    }
+    else
+    {
+      //Voltage or current is out side of monitoring limits, so reset timer count
+      soc_reset_counter = 0;
     }
 
     if (alert == 0)
     {
       //Turn LED off if alert is not active
       RedLED(false);
-    }
-  }
+    } //end if
+
+  } //end if
 }
