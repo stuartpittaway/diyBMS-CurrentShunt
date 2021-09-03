@@ -75,7 +75,19 @@ technically, any 50mV shunt can be used, but the PCB is drilled specifically for
 
 Larger rating shunts will work, but won't fit onto the PCB
 
-Note: Always pick a shunt at least 25% higher rating than you expect your maximum current load to be.
+## PICKING THE CORRECT SHUNT 
+
+Always pick a shunt at least 25% higher rating than you expect your maximum current load to be.
+
+The INA chip uses 40.96mV maximum shunt voltage, so 50mV shunts are ideal for this range.
+
+The maximum shunt current reading is calculated by this formula:
+
+"Total shunt amp rating" * (40.96 / "Shunt mV scale")
+
+For example a 200amp/50mV shunt:
+
+200 * (40.96 / 50) = 163.84amp maximum reading.
 
 
 # CODE/FIRMWARE
