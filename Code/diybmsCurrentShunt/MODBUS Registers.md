@@ -28,7 +28,6 @@ All registers are read only, unless also specified in "Write Registers" later on
 |40018|shunt_resistance
 |40019|shunt_max_current  (unsigned int16)
 |40020|shunt_millivolt  (unsigned int16)
-
 |40021|Battery Capacity (ah)  (unsigned int16)
 |40022|Fully charged voltage (4 byte double)
 |40023|Fully charged voltage
@@ -36,7 +35,6 @@ All registers are read only, unless also specified in "Write Registers" later on
 |40025|Tail current (Amps)
 |40026|Charge efficiency factor % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 9561 = 95.61%)
 |40027|State of charge % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 8012 = 80.12%, 100 = 1.00%)
-
 |40028|INA_REGISTER::SHUNT_CAL (unsigned int16)
 |40029|Temperature limit (signed int16)
 |40030|Bus Overvoltage (overvoltage protection)(4 byte double)
