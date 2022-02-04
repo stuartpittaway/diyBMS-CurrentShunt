@@ -1,4 +1,4 @@
-19224114231390813
+19225762803008419
 Battery
 BatteryHolder_Bulgin_BX0036_1xC
 Bulgin Battery Holder, BX0036, Battery Type C (https://www.bulgin.com/products/pub/media/bulgin/data/Battery_holders.pdf)
@@ -48782,6 +48782,13 @@ Shunt
 0
 0
 0
+CurrentShuntCircuit
+SOP-4_4.6x6.5x2.54P
+4-Lead Plastic Small Outline (SO) (http://www.everlight.com/file/ProductFile/201407061745083848.pdf)
+SO SOIC 2.54
+0
+4
+4
 CurrentShuntCircuit
 Terminal-Block_3.81_2P-LCSC_C395878
 

@@ -7,8 +7,8 @@ F https://www.ti.com/lit/ds/symlink/lm5009a.pdf
 $ENDCMP
 #
 $CMP S9013
-D TRANSISTOR (NPN) 
-K TRANSISTOR (NPN)
+D 15A Ic, 60V Vce, Power NPN Transistor, TO-3
+K power NPN Transistor
 F http://www.onsemi.com/pub_link/Collateral/2N3055-D.PDF
 $ENDCMP
 #
