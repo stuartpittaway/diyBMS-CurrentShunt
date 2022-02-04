@@ -32,4 +32,4 @@ U2 ,1,"ATtiny1614-SS","Package_SO:SOIC-14_3.9x8.7mm_P1.27mm","http://ww1.microch
 U3 ,1,"INA228","Package_SO:VSSOP-10_3x3mm_P0.5mm","https://www.ti.com/lit/ds/symlink/ina228.pdf","C2887910","INA228"
 U5 ,1,"LM5009A","Package_SO:MSOP-8_3x3mm_P0.65mm","https://www.ti.com/lit/ds/symlink/lm5009a.pdf","C477978","LM5009AMMX/NOPB"
 U6 ,1,"SP485EEN-L/TR","Package_SO:SOIC-8_3.9x4.9mm_P1.27mm","https://datasheet.lcsc.com/lcsc/2104081903_MaxLinear-SP485EEN-L-TR_C6855.pdf","C6855","SP485EEN-L/TR"
-U4 U7 U8 ,3,"6N137S(TA)","Package_SO:SOP-8_6.62x9.15mm_P2.54mm","https://datasheet.lcsc.com/lcsc/1811091924_Everlight-Elec-6N137S-TA_C16496.pdf","C16496",""
+U4 U7 U8 ,3,"6N137S(TA)","CurrentShuntCircuit:SMD-8_9.76x6.6x2.54P","https://datasheet.lcsc.com/lcsc/1811091924_Everlight-Elec-6N137S-TA_C16496.pdf","C16496",""
