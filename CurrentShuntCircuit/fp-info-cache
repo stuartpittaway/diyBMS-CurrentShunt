@@ -1,4 +1,4 @@
-19227406773327306
+19229051612701494
 Battery
 BatteryHolder_Bulgin_BX0036_1xC
 Bulgin Battery Holder, BX0036, Battery Type C (https://www.bulgin.com/products/pub/media/bulgin/data/Battery_holders.pdf)
@@ -48782,6 +48782,13 @@ Shunt
 0
 0
 0
+CurrentShuntCircuit
+SMD-6_6.5x7.1x2.54P
+
+
+0
+6
+6
 CurrentShuntCircuit
 SMD-8_9.76x6.6x2.54P
 SMD-8_9.76x6.6x2.54P

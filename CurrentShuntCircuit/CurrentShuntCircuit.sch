@@ -884,8 +884,6 @@ RELAY OUTPUT
 Wire Notes Line
 	5610 3785 5610 600 
 Wire Notes Line
-	6960 3880 6970 3880
-Wire Notes Line
 	6035 4195 6035 6745
 Text Notes 3520 6550 1    50   ~ 0
 UPDI
@@ -1060,20 +1058,6 @@ Wire Wire Line
 	10520 4285 10375 4285
 Connection ~ 10520 4285
 $Comp
-L Isolator:6N137 U8
-U 1 1 6200C0F6
-P 7370 5015
-F 0 "U8" H 7370 5482 50  0000 C CNN
-F 1 "6N137S(TA)" H 7370 5391 50  0000 C CNN
-F 2 "CurrentShuntCircuit:SMD-8_9.76x6.6x2.54P" H 7370 4515 50  0001 C CNN
-F 3 "https://datasheet.lcsc.com/lcsc/1811091924_Everlight-Elec-6N137S-TA_C16496.pdf" H 6520 5565 50  0001 C CNN
-F 4 "C16496" H 7370 5015 50  0001 C CNN "LCSCStockCode"
-F 5 "180" H 7370 5015 50  0001 C CNN "JLCPCBRotation"
-F 6 "6N137S(TA)" H 7370 5015 50  0001 C CNN "PartNumber"
-	1    7370 5015
-	1    0    0    -1  
-$EndComp
-$Comp
 L Device:C_Small C17
 U 1 1 6200CDDE
 P 7920 4915
@@ -1086,12 +1070,6 @@ F 5 "CC0805KRX7R9BB104" H 7920 4915 50  0001 C CNN "PartNumber"
 	1    7920 4915
 	1    0    0    -1  
 $EndComp
-Wire Wire Line
-	7670 4815 7705 4815
-Wire Wire Line
-	7670 5215 7920 5215
-Wire Wire Line
-	7920 5215 7920 5015
 $Comp
 L Jumper:SolderJumper_2_Bridged JP1
 U 1 1 62046C4C
@@ -1147,16 +1125,7 @@ $EndComp
 Wire Wire Line
 	6920 5215 7070 5215
 Wire Wire Line
-	7670 4915 7705 4915
-Wire Wire Line
-	7705 4915 7705 4815
-Connection ~ 7705 4815
-Wire Wire Line
-	7705 4815 7815 4815
-Wire Wire Line
 	8480 4990 8480 4940
-Wire Wire Line
-	7670 5015 7670 5080
 Wire Wire Line
 	7670 5080 8270 5080
 Wire Wire Line
@@ -1167,34 +1136,11 @@ Connection ~ 8480 4940
 Wire Wire Line
 	8480 4940 8480 4890
 $Comp
-L Isolator:6N137 U4
-U 1 1 62088B64
-P 7350 6045
-F 0 "U4" H 7350 6512 50  0000 C CNN
-F 1 "6N137S(TA)" H 7350 6421 50  0000 C CNN
-F 2 "CurrentShuntCircuit:SMD-8_9.76x6.6x2.54P" H 7350 5545 50  0001 C CNN
-F 3 "https://datasheet.lcsc.com/lcsc/1811091924_Everlight-Elec-6N137S-TA_C16496.pdf" H 6500 6595 50  0001 C CNN
-F 4 "C16496" H 7350 6045 50  0001 C CNN "LCSCStockCode"
-F 5 "180" H 7350 6045 50  0001 C CNN "JLCPCBRotation"
-F 6 "6N137S(TA)" H 7350 6045 50  0001 C CNN "PartNumber"
-	1    7350 6045
-	1    0    0    -1  
-$EndComp
-Wire Wire Line
-	7920 5215 8045 5215
-Connection ~ 7920 5215
-Wire Wire Line
-	7650 5945 7755 5945
-Wire Wire Line
-	7755 5945 7755 5845
-Wire Wire Line
-	7755 5845 7650 5845
-$Comp
 L Device:C_Small C13
 U 1 1 6209A5DA
 P 7890 5945
-F 0 "C13" H 7910 6020 50  0000 L CNN
-F 1 "100nF" H 7900 5880 50  0000 L CNN
+F 0 "C13" H 7670 5945 50  0000 L CNN
+F 1 "100nF" H 7655 5880 50  0000 L CNN
 F 2 "Capacitor_SMD:C_0805_2012Metric" H 7928 5795 50  0001 C CNN
 F 3 "" H 7890 5945 50  0001 C CNN
 F 4 "C49678" H 7890 5945 50  0001 C CNN "LCSCStockCode"
@@ -1202,17 +1148,6 @@ F 5 "CC0805KRX7R9BB104" H 7890 5945 50  0001 C CNN "PartNumber"
 	1    7890 5945
 	1    0    0    -1  
 $EndComp
-Wire Wire Line
-	7755 5845 7890 5845
-Connection ~ 7755 5845
-Wire Wire Line
-	7650 6245 7890 6245
-Wire Wire Line
-	7890 6245 7890 6045
-Wire Wire Line
-	7650 6045 7790 6045
-Wire Wire Line
-	7790 6045 7790 6120
 Wire Wire Line
 	7790 6120 8315 6120
 Wire Wire Line
@@ -1270,7 +1205,7 @@ Wire Wire Line
 Wire Wire Line
 	8315 5845 7890 5845
 Connection ~ 7890 5845
-Text Notes 8090 6345 0    50   ~ 0
+Text Notes 7970 5905 0    50   ~ 0
 Pull up may \nbe not needed
 $Comp
 L Device:R_Small R19
@@ -1293,22 +1228,8 @@ Wire Wire Line
 Wire Wire Line
 	8270 4815 8270 4880
 Connection ~ 7920 4815
-Text Notes 7995 5255 0    50   ~ 0
+Text Notes 7765 4785 0    50   ~ 0
 Pull up may \nbe not needed
-$Comp
-L Isolator:6N137 U7
-U 1 1 620E0883
-P 7370 3880
-F 0 "U7" H 7370 3413 50  0000 C CNN
-F 1 "6N137S(TA)" H 7370 3504 50  0000 C CNN
-F 2 "CurrentShuntCircuit:SMD-8_9.76x6.6x2.54P" H 7370 3380 50  0001 C CNN
-F 3 "https://datasheet.lcsc.com/lcsc/1811091924_Everlight-Elec-6N137S-TA_C16496.pdf" H 6520 4430 50  0001 C CNN
-F 4 "C16496" H 7370 3880 50  0001 C CNN "LCSCStockCode"
-F 5 "180" H 7370 3880 50  0001 C CNN "JLCPCBRotation"
-F 6 "6N137S(TA)" H 7370 3880 50  0001 C CNN "PartNumber"
-	1    7370 3880
-	-1   0    0    1   
-$EndComp
 $Comp
 L Device:R_Small R18
 U 1 1 620E1923
@@ -1350,7 +1271,7 @@ L Device:C_Small C12
 U 1 1 62100BF9
 P 6770 3980
 F 0 "C12" H 6790 4055 50  0000 L CNN
-F 1 "100nF" H 6780 3915 50  0000 L CNN
+F 1 "100nF" H 6875 3985 50  0000 L CNN
 F 2 "Capacitor_SMD:C_0805_2012Metric" H 6808 3830 50  0001 C CNN
 F 3 "" H 6770 3980 50  0001 C CNN
 F 4 "C49678" H 6770 3980 50  0001 C CNN "LCSCStockCode"
@@ -1359,27 +1280,12 @@ F 5 "CC0805KRX7R9BB104" H 6770 3980 50  0001 C CNN "PartNumber"
 	1    0    0    -1  
 $EndComp
 Wire Wire Line
-	7070 4080 7010 4080
-Wire Wire Line
 	6770 4080 6620 4080
 Connection ~ 6770 4080
 Wire Wire Line
 	6770 3880 6770 3680
 Wire Wire Line
 	6770 3680 7040 3680
-Wire Wire Line
-	7070 3980 7070 4020
-Wire Wire Line
-	7070 4020 7010 4020
-Wire Wire Line
-	7010 4020 7010 4080
-Connection ~ 7010 4080
-Wire Wire Line
-	7010 4080 6770 4080
-Wire Wire Line
-	7070 3880 6950 3880
-Wire Wire Line
-	6950 3880 6950 3825
 Wire Wire Line
 	6950 3825 6620 3825
 Wire Wire Line
@@ -1396,7 +1302,7 @@ L power:+5V #PWR018
 U 1 1 6213FC99
 P 6345 4085
 F 0 "#PWR018" H 6345 3935 50  0001 C CNN
-F 1 "+5V" H 6360 4258 50  0000 C CNN
+F 1 "+5V" H 6225 4120 50  0000 C CNN
 F 2 "" H 6345 4085 50  0001 C CNN
 F 3 "" H 6345 4085 50  0001 C CNN
 	1    6345 4085
@@ -1612,15 +1518,7 @@ F 3 "" H 6920 3420 50  0001 C CNN
 	1    0    0    -1  
 $EndComp
 Wire Wire Line
-	7040 3680 7040 3420
-Wire Wire Line
 	7040 3420 6920 3420
-Connection ~ 7040 3680
-Wire Wire Line
-	7040 3680 7070 3680
-Wire Wire Line
-	7890 6245 7950 6245
-Connection ~ 7890 6245
 $Comp
 L power:GND2 #PWR0107
 U 1 1 622243AB
@@ -1662,23 +1560,23 @@ $EndComp
 $Comp
 L power:GND2 #PWR0110
 U 1 1 62225E97
-P 7950 6245
-F 0 "#PWR0110" H 7950 5995 50  0001 C CNN
-F 1 "GND2" H 7955 6072 50  0000 C CNN
-F 2 "" H 7950 6245 50  0001 C CNN
-F 3 "" H 7950 6245 50  0001 C CNN
-	1    7950 6245
+P 7900 6445
+F 0 "#PWR0110" H 7900 6195 50  0001 C CNN
+F 1 "GND2" H 7905 6272 50  0000 C CNN
+F 2 "" H 7900 6445 50  0001 C CNN
+F 3 "" H 7900 6445 50  0001 C CNN
+	1    7900 6445
 	1    0    0    -1  
 $EndComp
 $Comp
 L power:GND2 #PWR0111
 U 1 1 622264D0
-P 8045 5215
-F 0 "#PWR0111" H 8045 4965 50  0001 C CNN
-F 1 "GND2" H 8050 5042 50  0000 C CNN
-F 2 "" H 8045 5215 50  0001 C CNN
-F 3 "" H 8045 5215 50  0001 C CNN
-	1    8045 5215
+P 7770 5415
+F 0 "#PWR0111" H 7770 5165 50  0001 C CNN
+F 1 "GND2" H 7775 5242 50  0000 C CNN
+F 2 "" H 7770 5415 50  0001 C CNN
+F 3 "" H 7770 5415 50  0001 C CNN
+	1    7770 5415
 	1    0    0    -1  
 $EndComp
 Wire Wire Line
@@ -1699,4 +1597,77 @@ Connection ~ 8315 5845
 Connection ~ 8315 4340
 Wire Wire Line
 	8315 4340 7815 4340
+$Comp
+L Isolator:H11L1 U4
+U 1 1 620B10DA
+P 7350 6145
+F 0 "U4" H 7694 6191 50  0000 L CNN
+F 1 "H11L1S(TA)" H 7694 6100 50  0000 L CNN
+F 2 "CurrentShuntCircuit:SMD-6_6.5x7.1x2.54P" H 7260 6145 50  0001 C CNN
+F 3 "https://datasheet.lcsc.com/lcsc/1810111530_Everlight-Elec-H11L1S-TA_C78589.pdf" H 7260 6145 50  0001 C CNN
+F 4 "C78589" H 7350 6145 50  0001 C CNN "LCSCStockCode"
+	1    7350 6145
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	7350 6445 7890 6445
+Wire Wire Line
+	7650 6145 7790 6145
+Wire Wire Line
+	7790 6145 7790 6120
+Wire Wire Line
+	7890 6045 7890 6445
+Connection ~ 7890 6445
+Wire Wire Line
+	7890 6445 7900 6445
+Wire Wire Line
+	7350 5845 7890 5845
+$Comp
+L Isolator:H11L1 U8
+U 1 1 620E7341
+P 7370 5115
+F 0 "U8" H 7714 5161 50  0000 L CNN
+F 1 "H11L1S(TA)" H 7714 5070 50  0000 L CNN
+F 2 "CurrentShuntCircuit:SMD-6_6.5x7.1x2.54P" H 7280 5115 50  0001 C CNN
+F 3 "https://datasheet.lcsc.com/lcsc/1810111530_Everlight-Elec-H11L1S-TA_C78589.pdf" H 7280 5115 50  0001 C CNN
+F 4 "C78589" H 7370 5115 50  0001 C CNN "LCSCStockCode"
+	1    7370 5115
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	7370 5415 7770 5415
+Wire Wire Line
+	7770 5415 7920 5415
+Wire Wire Line
+	7920 5015 7920 5415
+Connection ~ 7770 5415
+Wire Wire Line
+	7670 5115 7670 5080
+Wire Wire Line
+	7370 4815 7815 4815
+$Comp
+L Isolator:H11L1 U7
+U 1 1 62116ED1
+P 7370 3780
+F 0 "U7" H 7370 3299 50  0000 C CNN
+F 1 "H11L1S(TA)" H 7370 3390 50  0000 C CNN
+F 2 "CurrentShuntCircuit:SMD-6_6.5x7.1x2.54P" H 7280 3780 50  0001 C CNN
+F 3 "https://datasheet.lcsc.com/lcsc/1810111530_Everlight-Elec-H11L1S-TA_C78589.pdf" H 7280 3780 50  0001 C CNN
+F 4 "C78589" H 7370 3780 50  0001 C CNN "LCSCStockCode"
+	1    7370 3780
+	-1   0    0    1   
+$EndComp
+Wire Wire Line
+	7040 3480 7370 3480
+Wire Wire Line
+	7040 3420 7040 3480
+Connection ~ 7040 3480
+Wire Wire Line
+	7040 3480 7040 3680
+Wire Wire Line
+	7070 3780 6950 3780
+Wire Wire Line
+	6950 3780 6950 3825
+Wire Wire Line
+	6770 4080 7370 4080
 $EndSCHEMATC
