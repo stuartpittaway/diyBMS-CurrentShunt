@@ -30,6 +30,6 @@ SW1 ,1,"SW_DIP_x02","Button_Switch_THT:SW_DIP_SPSTx02_Slide_6.7x6.64mm_W7.62mm_P
 U1 ,1,"TLP172GM","Package_SO:SO-4_4.4x3.6mm_P2.54mm","https://datasheet.lcsc.com/szlcsc/TOSHIBA-TLP172GM-TPL-E-O_C261926.pdf","C261926","TLP172GM",""
 U2 ,1,"ATtiny1614-SS","Package_SO:SOIC-14_3.9x8.7mm_P1.27mm","http://ww1.microchip.com/downloads/en/DeviceDoc/ATtiny1614-data-sheet-40001995A.pdf","C481364","ATTINY1614-SSNR",""
 U3 ,1,"INA228","Package_SO:VSSOP-10_3x3mm_P0.5mm","https://www.ti.com/lit/ds/symlink/ina228.pdf","C2887910","INA228",""
+U4 U7 U8 ,3,"H11L1S(TA)","CurrentShuntCircuit:SMD-6_6.5x7.1x2.54P","https://datasheet.lcsc.com/lcsc/1810111530_Everlight-Elec-H11L1S-TA_C78589.pdf","C78589","",""
 U5 ,1,"LM5009A","Package_SO:MSOP-8_3x3mm_P0.65mm","https://www.ti.com/lit/ds/symlink/lm5009a.pdf","C477978","LM5009AMMX/NOPB",""
 U6 ,1,"SP485EEN-L/TR","Package_SO:SOIC-8_3.9x4.9mm_P1.27mm","https://datasheet.lcsc.com/lcsc/2104081903_MaxLinear-SP485EEN-L-TR_C6855.pdf","C6855","SP485EEN-L/TR","270"
-U4 U7 U8 ,3,"6N137S(TA)","CurrentShuntCircuit:SMD-8_9.76x6.6x2.54P","https://datasheet.lcsc.com/lcsc/1811091924_Everlight-Elec-6N137S-TA_C16496.pdf","C16496","6N137S(TA)","180"
