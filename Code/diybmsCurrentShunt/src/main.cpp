@@ -146,8 +146,6 @@ struct eeprom_regs
   uint16_t shunt_max_current;
   uint16_t shunt_millivolt;
 
-  // Maximum current that can be read at 40.96mV scale
-  double full_scale_current;
   // LSB step size for the CURRENT register where the current in Amperes is stored
   double CURRENT_LSB;
   // Resistance of SHUNT in OHMS
@@ -171,8 +169,10 @@ uint16_t CalculateSOC()
 {
   double milliamphour_in_scaled = ((double)milliamphour_in / 100.0) * registers.charge_efficiency_factor;
   double milliamphour_batterycapacity = 1000.0 * (uint32_t)registers.batterycapacity_amphour;
+
   double difference = milliamphour_in_scaled - milliamphour_out;
-  double answer = ((milliamphour_batterycapacity + difference) / milliamphour_batterycapacity);
+
+  double answer = 100 * (milliamphour_batterycapacity + difference) / milliamphour_batterycapacity;
 
   if (answer < 0)
   {
@@ -181,9 +181,9 @@ uint16_t CalculateSOC()
   }
 
   // Store result as fixed point decimal
-  uint16_t SOC = 10000 * answer;
+  uint16_t SOC = 100 * answer;
 
-  // Add a hard limit
+  // Add a hard upper limit 999.99%
   if (SOC > 99999)
   {
     SOC = 99999;
@@ -420,7 +420,7 @@ int64_t i2c_readInt40(const uint8_t inareg)
   reply += (uint64_t)d << 8;
   reply += (uint64_t)e;
 
-  // Cast to signed integer
+  // Cast to signed integer (which also sorts out the negative sign if applicable)
   return (int64_t)reply;
 }
 
@@ -526,7 +526,7 @@ void SetINA228ConfigurationRegisters()
 // value=8212 = 82.12%
 void SetSOC(uint16_t value)
 {
-  // Assume we have taken nothing out of the battery
+  // Assume battery is fully charged
   milliamphour_in = 0;
   // And we have consumed this much...
   milliamphour_out = (1 - (value / 10000)) * (1000 * (uint32_t)registers.batterycapacity_amphour);
@@ -726,7 +726,7 @@ bool SetRegister(uint16_t address, uint16_t value)
   {
     // Shunt Over Voltage Limit (current limit)
     newvalue.word[1] = value;
-    registers.R_SOVL = (newvalue.dblvalue * 1000 / 1.25) * full_scale_adc / registers.full_scale_current;
+    registers.R_SOVL = (newvalue.dblvalue * 1000 / 1.25) * full_scale_adc / registers.shunt_max_current;
 
     break;
   }
@@ -735,7 +735,7 @@ bool SetRegister(uint16_t address, uint16_t value)
   {
     // Shunt UNDER Voltage Limit (under current limit)
     newvalue.word[1] = value;
-    registers.R_SUVL = (newvalue.dblvalue * 1000 / 1.25) * full_scale_adc / registers.full_scale_current;
+    registers.R_SUVL = (newvalue.dblvalue * 1000 / 1.25) * full_scale_adc / registers.shunt_max_current;
     break;
   }
 
@@ -809,10 +809,11 @@ void ConfigureI2C()
   int16_t dieid = i2c_readword(INA_REGISTER::DIE_ID);
   dieid = (dieid & 0xFFF0) >> 4;
   // INA228 chip
-  if (dieid != 0x228)
-  {
-    blinkPattern(err_WrongChip);
-  }
+  // DONT BLOCK - VERSION MAY CHANGE
+  //if (dieid != 0x228)
+  //{
+    //blinkPattern(err_WrongChip);
+  //}
 
   // Configure our registers (after reset)
   if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG))
@@ -861,11 +862,11 @@ void CalculateLSB()
 
   // 150A/50mV shunt =   full_scale_current= 150.00A / 50.00 * 40.96 = 122.88 AMPS
   //                     RSHUNT = (50 / 1000) / 150 = 0.00033333333
-  //                     CURRENT_LSB = 150 / 524288 = 0.00028610229
-  //                     R_SHUNT_CAL = 52428800000 * 0.00028610229 *  0.00033333333 = 4999.999 = 5000
+  //                     CURRENT_LSB = 150/ 524288 = 0.000286102294921875
+  //                     R_SHUNT_CAL = 52428800000*0.000286102294921875*0.00033333333 = 4999.999 = 5000
 
   // Calculate CURRENT_LSB and R_SHUNT_CAL values
-  registers.full_scale_current = ((double)registers.shunt_max_current / (double)registers.shunt_millivolt) * full_scale_adc;
+  //registers.full_scale_current = ((double)registers.shunt_max_current / (double)registers.shunt_millivolt) * full_scale_adc;
   registers.RSHUNT = ((double)registers.shunt_millivolt / 1000.0) / (double)registers.shunt_max_current;
   registers.CURRENT_LSB = registers.shunt_max_current / (double)0x80000;
   registers.R_SHUNT_CAL = 4L * (13107200000L * registers.CURRENT_LSB * registers.RSHUNT);
@@ -954,20 +955,19 @@ void setup()
     // Clear structure
     memset(&registers, 0, sizeof(eeprom_regs));
 
-    // Conversion times for voltage and current = 2074us
-    // temperature = 540us
-    // 256 times sample averaging
-    //  MODE  = 1111 = Continuous bus, shunt voltage and temperature
-    //  VBUSCT= 111 = 6h = 4120µs BUS VOLT
-    //   VSHCT= 111 = 6h = 4120µs CURRENT
-    //    VTCT= 010 = 2h =  150µs TEMPERATURE
-    //     AVG= 100 = 4h = 128 ADC sample averaging count
-    //  B1111 111 111 010 100 = 0xFFD4
+    // Conversion times for voltage, current  temperature
+    // 128 times sample averaging
+    // MODE  = 1111 = Continuous bus, shunt voltage and temperature
+    // VBUSCT= 111 = 6h = 4120µs BUS VOLT
+    //  VSHCT= 111 = 6h = 4120µs CURRENT
+    //   VTCT= 010 = 2h =  150µs TEMPERATURE
+    //    AVG= 100 = 4h = 128 ADC sample averaging count
+    // B1111 111 111 010 100 = 0xFFD4
     registers.R_ADC_CONFIG = 0xFFD4;
 
     registers.R_CONFIG = _BV(4); // ADCRANGE = 40.96mV scale
 
-    //Defaults for battery capacity/voltages
+    // Defaults for battery capacity/voltages
     registers.batterycapacity_amphour = 280;
     registers.fully_charged_voltage = 3.50 * 16;
     registers.tail_current_amps = 20;
@@ -1000,8 +1000,43 @@ void setup()
     // By default, trigger relay on all alerts
     registers.relay_trigger_bitmap = ALL_ALERT_BITS;
 
-    // Default SOC% at 60% - this also defaults milliamphour_in to half the battery capacity
-    SetSOC(6000);
+    // Default SOC% at 60%
+    uint16_t soc = 6000;
+
+    // We apply a "guestimate" to SoC based on voltage - not really accurate, but somewhere to start
+    // only applicable to 24V/48V (16S) setups. These voltages should be the unloaded (no current flowing) voltage.
+    double v = BusVoltage();
+
+    if (v > 20 && v < 30)
+    {
+      //Scale up to use the 48V scale
+      v = v * 2;
+    }
+
+    if (v > 40 && v < 60)
+    {
+      // 16S LIFEPO4...
+      if (v >= 40.0)
+        soc = 500;
+      if (v >= 48.0)
+        soc = 900;
+      if (v >= 50.0)
+        soc = 1400;
+      if (v >= 51.2)
+        soc = 1700;
+      if (v >= 51.6)
+        soc = 2000;
+      if (v >= 52.0)
+        soc = 3000;
+      if (v >= 52.4)
+        soc = 4000;
+      if (v >= 52.8)
+        soc = 7000;
+      if (v >= 53.2)
+        soc = 9000;
+    }
+
+    SetSOC(soc);
   }
 
   // Flash LED to indicate normal boot up
@@ -1047,13 +1082,15 @@ double BusVoltage()
   // The accuracy is 20bits and 195.3125uV is the LSB
   // Use integer math where possible
   uint64_t busVoltage_mV = (uint64_t)busVoltage * 1953125 / 10000000; // conversion to get mV
+  // Return VOLTS
   return (double)busVoltage_mV / (double)1000.0;
 }
 
 // Shunt voltage in MILLIVOLTS mV
 double ShuntVoltage()
 {
-  // 78.125 nV/LSB
+  // 78.125 nV/LSB when ADCRANGE = 1
+  // Differential voltage measured across the shunt output. Two's complement value.
   return (double)((uint64_t)readInt20(INA_REGISTER::VSHUNT) * 78125) / 1000000000.0;
 }
 
@@ -1087,9 +1124,10 @@ double DieTemperature()
 {
   // The accuracy of the temperature sensor is ±2 °C across the operational temperature range. The temperature
   // value is stored inside the DIETEMP register and can be read through the digital interface
-  // Internal die temperature measurement. Two's complement value. Conversion factor: 7.8125 m°C/LSB
+  // Internal die temperature measurement.
 
   // Case unsigned to int16 to cope with negative temperatures
+  // Two's complement value. Conversion factor: 7.8125 m°C/LSB
   double dietemp = (int16_t)i2c_readword(INA_REGISTER::DIETEMP);
 
   return dietemp * (double)0.0078125;
@@ -1409,7 +1447,7 @@ uint16_t ReadHoldingRegister(uint16_t address)
     int16_t value = i2c_readword(INA_REGISTER::SOVL);
 
     // 1.25 µV/LSB
-    ShuntOverCurrentLimit.dblvalue = ((double)value / 1000 * 1.25) / full_scale_adc * registers.full_scale_current;
+    ShuntOverCurrentLimit.dblvalue = ((double)value / 1000 * 1.25) / full_scale_adc * registers.shunt_max_current;
 
     return ShuntOverCurrentLimit.word[0];
     break;
@@ -1425,7 +1463,7 @@ uint16_t ReadHoldingRegister(uint16_t address)
     // Shunt UNDER Voltage Limit (under current limit)
     int16_t value = i2c_readword(INA_REGISTER::SUVL);
 
-    ShuntUnderCurrentLimit.dblvalue = ((double)value / 1000 * 1.25) / full_scale_adc * registers.full_scale_current;
+    ShuntUnderCurrentLimit.dblvalue = ((double)value / 1000 * 1.25) / full_scale_adc * registers.shunt_max_current;
 
     return ShuntUnderCurrentLimit.word[0];
     break;
@@ -1695,7 +1733,7 @@ void loop()
       {
         // Now we reset the SOC, by clearing the registers, at this point SOC returns to 100%
 
-        // This does have an annoying "feature" of clearing down todays AH counts :-(
+        // This does have an annoying "feature" of clearing down todays Ah counts :-(
         // TODO: FIX THIS - probably need a set of shadow variables to hold the internal SOC and AH counts
         //                  but then when/how do we reset the Ah counts?
 
