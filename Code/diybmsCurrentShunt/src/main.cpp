@@ -33,8 +33,8 @@ https://creativecommons.org/licenses/by-nc-sa/2.0/uk/
 // MODBUS Protocol
 // https://www.ni.com/en-gb/innovations/white-papers/14/the-modbus-protocol-in-depth.html
 
-//INA228 85-V, 20-Bit, Ultra-Precise Power/Energy/Charge Monitor
-//https://www.ti.com/lit/ds/symlink/ina228.pdf
+// INA228 85-V, 20-Bit, Ultra-Precise Power/Energy/Charge Monitor
+// https://www.ti.com/lit/ds/symlink/ina228.pdf
 
 #if !defined(MODBUSDEFAULTBAUDRATE)
 #error MODBUSDEFAULTBAUDRATE must be defined
@@ -68,24 +68,24 @@ FastCRC16 CRC16;
 #define REDLED_PIN_BITMAP PIN6_bm
 #define RELAY_PIN_BITMAP PIN5_bm
 
-//Sequences used to indicate error on RED led
-//Single flash
+// Sequences used to indicate error on RED led
+// Single flash
 const static uint32_t err_INA228Missing = 0xF000000F;
-//Two flashes
+// Two flashes
 const static uint32_t err_InitialConfigure = 0xF0F0000F;
-//3 flashes
+// 3 flashes
 const static uint32_t err_WrongChip = 0xF0F0F00F;
-//4 flashes (0xCC=2 flashes)
+// 4 flashes (0xCC=2 flashes)
 const static uint32_t err_WriteConfig = 0xCCCC000F;
-//5 flashes (0xC0=1 short flash)
+// 5 flashes (0xC0=1 short flash)
 const static uint32_t err_WriteADCConfig = 0xCCCCC00F;
-//6 flashes
+// 6 flashes
 const static uint32_t err_WriteRegisters = 0xCCCCCC0F;
-//7 flashes (0xAA=4 fast flashes)
+// 7 flashes (0xAA=4 fast flashes)
 const static uint32_t err_INA228Reset = 0xAAA8000F;
-//8 flashes  10101010101010100000000000001111
+// 8 flashes  10101010101010100000000000001111
 const static uint32_t err_CheckSumErr = 0xAAAA000F;
-//9 flashes 00101010101010101010000000001111
+// 9 flashes 00101010101010101010000000001111
 const static uint32_t err_ResetChargeEnergyRegisters = 0x2AAAA00F;
 
 typedef union
@@ -95,7 +95,7 @@ typedef union
 } DoubleUnionType;
 
 const double full_scale_adc = 40.96;
-//const double CoulombsToAmpHours = 1.0 / 3600.0;
+// const double CoulombsToAmpHours = 1.0 / 3600.0;
 const double CoulombsToMilliAmpHours = 1.0 / 3.6;
 const uint8_t INA228_I2C_Address = B1000000;
 
@@ -129,8 +129,8 @@ struct eeprom_regs
 {
   uint16_t R_CONFIG;
   uint16_t R_ADC_CONFIG;
-  uint16_t R_SHUNT_CAL;    //Shunt Calibration
-  uint16_t R_SHUNT_TEMPCO; //Shunt Temperature Coefficient
+  uint16_t R_SHUNT_CAL;    // Shunt Calibration
+  uint16_t R_SHUNT_TEMPCO; // Shunt Temperature Coefficient
   uint16_t R_DIAG_ALRT;
   uint16_t R_SOVL;
   uint16_t R_SUVL;
@@ -139,15 +139,18 @@ struct eeprom_regs
   uint16_t R_TEMP_LIMIT;
   uint16_t R_PWR_LIMIT;
 
-  //Holds what alert events trigger the relay to turn on/high
-  //uses the same values/mapping as enum DIAG_ALRT_FIELD
+  // Holds what alert events trigger the relay to turn on/high
+  // uses the same values/mapping as enum DIAG_ALRT_FIELD
   uint16_t relay_trigger_bitmap;
 
   uint16_t shunt_max_current;
   uint16_t shunt_millivolt;
 
+  // Maximum current that can be read at 40.96mV scale
   double full_scale_current;
+  // LSB step size for the CURRENT register where the current in Amperes is stored
   double CURRENT_LSB;
+  // Resistance of SHUNT in OHMS
   double RSHUNT;
 
   uint16_t batterycapacity_amphour;
@@ -163,22 +166,27 @@ uint16_t alert = 0;
 
 volatile bool wdt_triggered = false;
 volatile uint16_t wdt_triggered_count;
-volatile uint16_t SOC;
 
 uint16_t CalculateSOC()
 {
   double milliamphour_in_scaled = ((double)milliamphour_in / 100.0) * registers.charge_efficiency_factor;
   double milliamphour_batterycapacity = 1000.0 * (uint32_t)registers.batterycapacity_amphour;
-
   double difference = milliamphour_in_scaled - milliamphour_out;
+  double answer = ((milliamphour_batterycapacity + difference) / milliamphour_batterycapacity);
 
-  //Store result as fixed float point decimal
-  uint16_t SOC = 10000 * ((milliamphour_batterycapacity + difference) / milliamphour_batterycapacity);
-
-  //Add a hard limit, so user understands that the configuration needs review/change
-  if (SOC > 10500)
+  if (answer < 0)
   {
-    SOC = 10500;
+    // We have taken more out of the battery than put in, so must be zero SoC (or more likely out of calibration)
+    return 0;
+  }
+
+  // Store result as fixed point decimal
+  uint16_t SOC = 10000 * answer;
+
+  // Add a hard limit
+  if (SOC > 99999)
+  {
+    SOC = 99999;
   }
 
   return SOC;
@@ -197,7 +205,7 @@ void ConfigurePorts()
   // Set pins as Outputs (other pins are inputs)
   PORTA.DIR = GREENLED_PIN_BITMAP | REDLED_PIN_BITMAP | RELAY_PIN_BITMAP;
 
-  //Relay off by default
+  // Relay off by default
   PORTA.OUTCLR = RELAY_PIN_BITMAP;
 
   // Set Port B digital outputs
@@ -211,39 +219,39 @@ void ConfigurePorts()
 
   PORTB.OUTSET = PIN2_bm; // TX is high
 
-  USART0.CTRLB = USART_RXEN_bm | USART_TXEN_bm; //enable rx and tx
-  //Enable interrupts
+  USART0.CTRLB = USART_RXEN_bm | USART_TXEN_bm; // enable rx and tx
+  // Enable interrupts
   sei();
 }
 
 // Read the jumper pins
 void ReadJumperPins()
 {
-  //Switch pull ups on for the pins, if they are jumpered they are pulled to ground
+  // Switch pull ups on for the pins, if they are jumpered they are pulled to ground
   PORTA.PIN3CTRL = PORT_PULLUPEN_bm;
   PORTA.PIN4CTRL = PORT_PULLUPEN_bm;
 
   // PA3 = Baud Rate
   // PA4 = Modbus Address
 
-  //High value means unconnected/not jumpered
+  // High value means unconnected/not jumpered
   bool BaudRateJumper = (PORTA.IN & PIN3_bm);
   bool AddressJumper = (PORTA.IN & PIN4_bm);
 
-  //TODO: Do something with the above jumper settings
+  // TODO: Do something with the above jumper settings
   if (BaudRateJumper == false)
   {
-    //Half the default baud rate if the jumper is connected, so 19200 goes to 9600
+    // Half the default baud rate if the jumper is connected, so 19200 goes to 9600
     ModBusBaudRate = ModBusBaudRate / 2;
   }
 
   if (AddressJumper == false)
   {
-    //Jumper connected, increase address by 8
+    // Jumper connected, increase address by 8
     ModbusSlaveAddress += 8;
   }
 
-  //Switch off pull ups
+  // Switch off pull ups
   PORTA.PIN3CTRL = 0;
   PORTA.PIN4CTRL = 0;
 }
@@ -279,7 +287,7 @@ void EnableWatchdog()
   // Enter protection mode
   CCP = 0xD8;
 
-  //8 seconds
+  // 8 seconds
   WDT.CTRLA = WDT_PERIOD_enum::WDT_PERIOD_8KCLK_gc;
 
   wdt_reset();
@@ -298,7 +306,7 @@ void EnableSerial0TX()
   //direction is automatically set as input by hardware, even if it was configured as output by the user
   //PB2 as OUTPUT
   PORTB.DIRSET = PIN2_bm;
-  USART0.CTRLB |= USART_TXEN_bm; // Transmitter Enable bit mask. 
+  USART0.CTRLB |= USART_TXEN_bm; // Transmitter Enable bit mask.
 }
 */
 
@@ -317,7 +325,7 @@ bool i2c_writeword(const uint8_t inareg, const uint16_t data)
   Wire.write((uint8_t)data);        // and then the second byte
   uint8_t result = Wire.endTransmission();
 
-  //Delay after making a write to INA chip
+  // Delay after making a write to INA chip
   delayMicroseconds(10);
 
   return result == 0;
@@ -347,7 +355,6 @@ uint32_t i2c_readUint24(const uint8_t inareg)
   Wire.beginTransmission(INA228_I2C_Address);
   Wire.write(inareg);
   uint8_t result = Wire.endTransmission();
-
   delayMicroseconds(10);
   Wire.requestFrom(INA228_I2C_Address, (uint8_t)3); // Request 3 bytes
   while (!Wire.available())
@@ -358,9 +365,7 @@ uint32_t i2c_readUint24(const uint8_t inareg)
   b = Wire.read();
   c = Wire.read();
 
-  uint32_t reply = (uint32_t)a << 16;
-  reply += (uint32_t)b << 8;
-  reply += (uint32_t)c;
+  uint32_t reply = ((uint32_t)a << 16) | ((uint32_t)b << 8) | ((uint32_t)c);
 
   return reply;
 }
@@ -406,7 +411,7 @@ int64_t i2c_readInt40(const uint8_t inareg)
   d = Wire.read();
   e = Wire.read();
 
-  //Check if a twos compliment negative number
+  // Check if a twos compliment negative number
   uint64_t reply = (a & 0x80) ? (uint64_t)0xFFFFFF0000000000 : 0;
 
   reply += (uint64_t)a << 32;
@@ -415,21 +420,31 @@ int64_t i2c_readInt40(const uint8_t inareg)
   reply += (uint64_t)d << 8;
   reply += (uint64_t)e;
 
-  //Cast to signed integer
+  // Cast to signed integer
   return (int64_t)reply;
 }
 
-//Read a 24 bit (3 byte) TWOS COMPLIMENT integer
-int32_t i2c_readInt24(const uint8_t inareg)
+// Read a 24 bit (3 byte) unsigned integer
+uint32_t readUInt24(const uint8_t inareg)
 {
-  uint32_t value = (i2c_readUint24(inareg) & (uint32_t)0xFFFFF0) >> 4;
+  return i2c_readUint24(inareg) >> 4;
+}
 
-  //Is the signed bit set (bit 20)
-  if (value & 0x80000UL)
+// Read a 20 bit (3 byte) TWOS COMPLIMENT integer
+int32_t readInt20(const uint8_t inareg)
+{
+  uint32_t value = i2c_readUint24(inareg);
+
+  // The number is two's complement, check for negative
+  if (value & 0x800000)
   {
-    //Set bits 24 to 32 to indicate negative number (twos compliment)
-    value |= 0xfff00000UL;
+    // first 12 bits are set to 1, indicating negative number
+    value = (value >> 4) | 0xFFF00000;
   }
+  else
+  {
+    value = value >> 4;
+  } // if-then negative
 
   return (int32_t)value;
 }
@@ -438,12 +453,12 @@ int32_t i2c_readInt24(const uint8_t inareg)
 void __attribute__((noreturn)) blinkPattern(uint32_t pattern)
 {
 
-  //Show the error 4 times
+  // Show the error 4 times
   for (size_t x = 0; x < 4; x++)
   {
     uint32_t p = pattern;
 
-    //Loop through the 32 bits - takes 1024ms in total
+    // Loop through the 32 bits - takes 1024ms in total
     for (size_t i = 0; i < 32; i++)
     {
       wdt_reset();
@@ -457,11 +472,11 @@ void __attribute__((noreturn)) blinkPattern(uint32_t pattern)
       }
       p >>= 1;
 
-      //Give user enough time to count the pulses
+      // Give user enough time to count the pulses
       delay(200);
     }
 
-    //Switch off LED and wait half second before repeating
+    // Switch off LED and wait half second before repeating
     RedLED(false);
     for (size_t i = 0; i < 40; i++)
     {
@@ -470,21 +485,21 @@ void __attribute__((noreturn)) blinkPattern(uint32_t pattern)
     }
   }
 
-  //Both LEDs on whilst we wait for WDT
+  // Both LEDs on whilst we wait for WDT
   RedLED(true);
   GreenLED(true);
 
-  //Finally just hang - this will trigger the watchdog causing a reboot
+  // Finally just hang - this will trigger the watchdog causing a reboot
   delay(10000);
 }
 
 void ResetChargeEnergyRegisters()
 {
-  //BIT 14
-  //RSTACC
-  //Resets the contents of accumulation registers ENERGY and CHARGE to 0
-  //0h = Normal Operation
-  //1h = Clears registers to default values for ENERGY and CHARGE registers
+  // BIT 14
+  // RSTACC
+  // Resets the contents of accumulation registers ENERGY and CHARGE to 0
+  // 0h = Normal Operation
+  // 1h = Clears registers to default values for ENERGY and CHARGE registers
 
   if (!i2c_writeword(INA_REGISTER::CONFIG, registers.R_CONFIG | (uint16_t)_BV(14)))
   {
@@ -505,6 +520,16 @@ void SetINA228ConfigurationRegisters()
   {
     blinkPattern(err_WriteADCConfig);
   }
+}
+
+// Sets SOC by setting "fake" in/out amphour counts
+// value=8212 = 82.12%
+void SetSOC(uint16_t value)
+{
+  // Assume we have taken nothing out of the battery
+  milliamphour_in = 0;
+  // And we have consumed this much...
+  milliamphour_out = (1 - (value / 10000)) * (1000 * (uint32_t)registers.batterycapacity_amphour);
 }
 
 void SetINA228Registers()
@@ -549,7 +574,7 @@ bool SetRegister(uint16_t address, uint16_t value)
   case 35:
   case 37:
   {
-    //Set word[0] in preperation for the next register to be written
+    // Set word[0] in preperation for the next register to be written
     newvalue.word[0] = value;
     break;
   }
@@ -579,45 +604,44 @@ bool SetRegister(uint16_t address, uint16_t value)
     uint8_t flag1 = value >> 8;
     uint8_t flag2 = value;
 
-    //Flag1 holds only 2 useful bits when setting
-    //TempCompEnabled
+    // Flag1 holds only 2 useful bits when setting
+    // TempCompEnabled
     if ((flag1 & B00000010) != 0)
     {
-      //Set bit
+      // Set bit
       registers.R_CONFIG |= bit(5);
     }
     else
     {
-      //Clear bit
+      // Clear bit
       registers.R_CONFIG &= ~bit(5);
     }
 
-    //ADCRange = 40.96 or 163.84 ?;
+    // ADCRange = 40.96 or 163.84 ?;
     if ((flag1 & B00000001) != 0)
     {
-      //1h = ± 40.96 mV
+      // 1h = ± 40.96 mV
       registers.R_CONFIG |= bit(4);
     }
     else
     {
-      //0h = ±163.84 mV
+      // 0h = ±163.84 mV
       registers.R_CONFIG &= ~bit(4);
     }
 
-    //Flag2 bitmask can be applied directly to trigger_bitmap
+    // Flag2 bitmask can be applied directly to trigger_bitmap
     registers.relay_trigger_bitmap = flag2 & ALL_ALERT_BITS;
 
-    //TODO: Process RelayState
-    //flag2 & B00000010;
+    // TODO: Process RelayState
+    // flag2 & B00000010;
 
-    //TODO: Process Factory Reset
-    //flag2 & B00000001;
+    // TODO: Process Factory Reset
+    // flag2 & B00000001;
 
-    //Set CONFIG and ADC_CONFIG
+    // Set CONFIG and ADC_CONFIG
     SetINA228ConfigurationRegisters();
     break;
   }
-
   case 18:
   {
     registers.shunt_max_current = value;
@@ -626,7 +650,7 @@ bool SetRegister(uint16_t address, uint16_t value)
   }
   case 19:
   {
-    //Register 40020
+    // Register 40020
     registers.shunt_millivolt = value;
     CalculateLSB();
     break;
@@ -659,34 +683,32 @@ bool SetRegister(uint16_t address, uint16_t value)
     registers.charge_efficiency_factor = ((double)value) / 100.0;
     break;
   }
-    //case 26:
-    //{
+  case 26:
+  {
     //|40027|State of charge % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 8012 = 80.12%, 100 = 1.00%)
-    //registers.batterycapacity_amphour = value;
-    //break;
-    //}
-
+    // Change SOC by altering the amp hour counters
+    SetSOC(value);
+    break;
+  }
   case 27:
   {
-    //Register 40028
-    //SHUNT_CAL register
+    // Register 40028
+    // SHUNT_CAL register
     registers.R_SHUNT_CAL = value;
     break;
   }
-
   case 28:
   {
-    //temperature limit
-    //Case unsigned to int16 to cope with negative temperatures
+    // temperature limit
+    // Case unsigned to int16 to cope with negative temperatures
     registers.R_TEMP_LIMIT = (int16_t)value / (double)0.0078125;
     break;
   }
-
   case 30:
   {
-    //Bus Overvoltage (overvoltage protection).
-    //Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
-    //BusOverVolt.dblvalue = ((double)(uint16_t)i2c_readword(INA_REGISTER::BOVL)) * 0.003125F;
+    // Bus Overvoltage (overvoltage protection).
+    // Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
+    // BusOverVolt.dblvalue = ((double)(uint16_t)i2c_readword(INA_REGISTER::BOVL)) * 0.003125F;
     newvalue.word[1] = value;
     registers.R_BOVL = newvalue.dblvalue / 0.003125F;
     break;
@@ -694,7 +716,7 @@ bool SetRegister(uint16_t address, uint16_t value)
 
   case 32:
   {
-    //Bus under voltage
+    // Bus under voltage
     newvalue.word[1] = value;
     registers.R_BUVL = newvalue.dblvalue / 0.003125F;
     break;
@@ -702,7 +724,7 @@ bool SetRegister(uint16_t address, uint16_t value)
 
   case 34:
   {
-    //Shunt Over Voltage Limit (current limit)
+    // Shunt Over Voltage Limit (current limit)
     newvalue.word[1] = value;
     registers.R_SOVL = (newvalue.dblvalue * 1000 / 1.25) * full_scale_adc / registers.full_scale_current;
 
@@ -711,7 +733,7 @@ bool SetRegister(uint16_t address, uint16_t value)
 
   case 36:
   {
-    //Shunt UNDER Voltage Limit (under current limit)
+    // Shunt UNDER Voltage Limit (under current limit)
     newvalue.word[1] = value;
     registers.R_SUVL = (newvalue.dblvalue * 1000 / 1.25) * full_scale_adc / registers.full_scale_current;
     break;
@@ -719,7 +741,7 @@ bool SetRegister(uint16_t address, uint16_t value)
 
   case 38:
   {
-    //Shunt Over POWER LIMIT
+    // Shunt Over POWER LIMIT
     newvalue.word[1] = value;
     registers.R_PWR_LIMIT = (uint16_t)(newvalue.dblvalue / 256.0 / 3.2 / registers.CURRENT_LSB);
     break;
@@ -727,14 +749,14 @@ bool SetRegister(uint16_t address, uint16_t value)
 
   case 39:
   {
-    //Shunt Temperature Coefficient
+    // Shunt Temperature Coefficient
     registers.R_SHUNT_TEMPCO = value;
     break;
   }
 
   case 45:
   {
-    //Watchdog timer trigger count (like error counter)
+    // Watchdog timer trigger count (like error counter)
     wdt_triggered_count = value;
     break;
   }
@@ -748,9 +770,9 @@ bool SetRegister(uint16_t address, uint16_t value)
 
   SetINA228Registers();
 
-  //Rather than writing to EEPROM on every register change (there could be several)
-  //mark the configuration as "dirty" and the loop() will write the config to EEPROM
-  //in a few seconds time
+  // Rather than writing to EEPROM on every register change (there could be several)
+  // mark the configuration as "dirty" and the loop() will write the config to EEPROM
+  // in a few seconds time
   config_dirty = true;
 
   return true;
@@ -760,33 +782,33 @@ void ConfigureI2C()
 {
   // join i2c bus (address optional for master)
   Wire.begin();
-  //Change TWI pins to use PA1/PA2 and not PB1/PB0
+  // Change TWI pins to use PA1/PA2 and not PB1/PB0
   Wire.swap(1);
-  //Use fast i2c
+  // Use fast i2c
   Wire.setClock(400000);
 
-  //See if the device is connected/soldered on board
+  // See if the device is connected/soldered on board
   Wire.beginTransmission(INA228_I2C_Address); // transmit to device
   if (Wire.endTransmission() > 0)
   {
     blinkPattern(err_INA228Missing);
   }
 
-  //Now we know the INA228 is connected, reset to power on defaults
+  // Now we know the INA228 is connected, reset to power on defaults
   if (!i2c_writeword(INA_REGISTER::CONFIG, (uint16_t)_BV(15)))
   {
     blinkPattern(err_INA228Reset);
   }
 
-  //Allow the reset to work
+  // Allow the reset to work
   delay(100);
 
-  //Get the INA chip model number (make sure we are dealing with an INA228)
+  // Get the INA chip model number (make sure we are dealing with an INA228)
 
-  //Clear lower 4 bits, holds chip revision (zero in my case)
+  // Clear lower 4 bits, holds chip revision (zero in my case)
   int16_t dieid = i2c_readword(INA_REGISTER::DIE_ID);
   dieid = (dieid & 0xFFF0) >> 4;
-  //INA228 chip
+  // INA228 chip
   if (dieid != 0x228)
   {
     blinkPattern(err_WrongChip);
@@ -803,81 +825,104 @@ void ConfigureI2C()
     blinkPattern(err_InitialConfigure);
   }
 
-  //Shunt cal
+  // Shunt cal
   if (!i2c_writeword(INA_REGISTER::SHUNT_CAL, registers.R_SHUNT_CAL))
   {
     blinkPattern(err_InitialConfigure);
   }
 
-  //SLOWALERT ALATCH
+  // SLOWALERT ALATCH
   if (!i2c_writeword(INA_REGISTER::DIAG_ALRT, registers.R_DIAG_ALRT))
   {
     blinkPattern(err_InitialConfigure);
   }
 
-  //Check MEMSTAT=1 which proves the INA chip is not corrupt
+  // Check MEMSTAT=1 which proves the INA chip is not corrupt
   diag_alrt_value = i2c_readword(INA_REGISTER::DIAG_ALRT);
   if (diag_alrt_value & bit(DIAG_ALRT_FIELD::MEMSTAT) == 0)
   {
-    //MEMSTAT
-    //This bit is set to 0 if a checksum error is detected in the device trim memory space.
-    //0h = Memory Checksum Error
-    //1h = Normal Operation
+    // MEMSTAT
+    // This bit is set to 0 if a checksum error is detected in the device trim memory space.
+    // 0h = Memory Checksum Error
+    // 1h = Normal Operation
     blinkPattern(err_CheckSumErr);
   }
 
   SetINA228Registers();
-
-  /*
-  //Sets the threshold for comparison of the value to detect Bus Overvoltage (overvoltage protection).
-  //Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
-  uint16_t BusOvervoltageThreshold = (uint16_t)(12.0F / 0.003125F) & 0x7FFFU;
-  i2c_writeword(INA_REGISTER::BOVL, BusOvervoltageThreshold);
-
-  //5Volt
-  //uint16_t BusUndervoltageThreshold = (uint16_t)(5.0F / 0.003125F) & 0x7FFFU;
-  //i2c_writeword(INA_REGISTER::BUVL, BusUndervoltageThreshold);
-
-  //Sets the threshold for comparison of the value to detect power overlimit measurements. Unsigned representation, positive value only.
-  //The value entered in this field compares directly against the value from the POWER register to determine if an
-  //over power condition exists. Conversion factor: 256 × Power LSB.
-  //uint16_t PowerOverLimitThreshold = (uint16_t)(100);
-  //i2c_writeword(INA_REGISTER::PWR_LIMIT, PowerOverLimitThreshold);
-
-  //Current limit based on mV scale on shunt
-  //Sets the threshold for comparison of the value to detect Shunt Overvoltage (overcurrent protection). Two's complement value.
-  //Conversion Factor: 1.25 µV/LSB when ADCRANGE = 1.
-
-  //Alert over current at 0.725A
-  const double x = (1.0 / full_scale_current) * full_scale_adc;
-  int16_t CurrentOverThreshold = (x * 1000.0 / 1.25);
-  i2c_writeword(INA_REGISTER::SOVL, CurrentOverThreshold);
-
-  //Negative (limit current whilst charging)
-  const double y = (-0.500 / full_scale_current) * full_scale_adc;
-  int16_t CurrentUnderThreshold = (y * 1000.0 / 1.25);
-  i2c_writeword(INA_REGISTER::SUVL, CurrentUnderThreshold);
-  */
 }
 
 void CalculateLSB()
 {
-  //150A@50mV shunt =   122.88A @ 40.96mV (full scale ADC)
-  // Each LSB on the 20 bit ADC (524288 possible values) is 122.88/524288 = 0.000234375A = CURRENT_LSB
-  // Resistance (RSHUNT) = 0.00033333333333
 
-  // Shunt calibration = 52428800000 * 0.000234375 * 0.00033333333333 = 4095.999999 = 4096
+  // Take a look at these for information on how it works!
+  // https://dev.ti.com/gallery/view/4910879/INA228_229_237_238_239EVM_GUI/ver/2.0.0/
+  // in above - click COG icon top left.
+  // https://e2e.ti.com/support/amplifiers-group/amplifiers/f/amplifiers-forum/1034569/ina228-accumulated-energy-and-charge-is-wrong
 
+  // 150A/50mV shunt =   full_scale_current= 150.00A / 50.00 * 40.96 = 122.88 AMPS
+  //                     RSHUNT = (50 / 1000) / 150 = 0.00033333333
+  //                     CURRENT_LSB = 150 / 524288 = 0.00028610229
+  //                     R_SHUNT_CAL = 52428800000 * 0.00028610229 *  0.00033333333 = 4999.999 = 5000
+
+  // Calculate CURRENT_LSB and R_SHUNT_CAL values
   registers.full_scale_current = ((double)registers.shunt_max_current / (double)registers.shunt_millivolt) * full_scale_adc;
   registers.RSHUNT = ((double)registers.shunt_millivolt / 1000.0) / (double)registers.shunt_max_current;
-  registers.CURRENT_LSB = registers.full_scale_current / (double)0x80000;
-  registers.R_SHUNT_CAL = 4L * 13107200000L * registers.CURRENT_LSB * registers.RSHUNT;
+  registers.CURRENT_LSB = registers.shunt_max_current / (double)0x80000;
+  registers.R_SHUNT_CAL = 4L * (13107200000L * registers.CURRENT_LSB * registers.RSHUNT);
+
+  // Hardcoded "good values" based on the dev.ti.com calculation
+  // this attempts to avoid floating point issues with rounding in further calculations
+  if (registers.shunt_millivolt == 50)
+  {
+    switch (registers.shunt_max_current)
+    {
+    case 50:
+      // True LSB=0.00010000, Max Current=40.96
+      registers.CURRENT_LSB = 0.0001;
+      registers.R_SHUNT_CAL = 5243;
+      break;
+    case 100:
+      // True LSB=0.000200004, Max Current=81.92
+      registers.CURRENT_LSB = 0.0002;
+      registers.R_SHUNT_CAL = 5243;
+      break;
+    case 150:
+      // True LSB = 0.000300007, Max current=122.880
+      registers.CURRENT_LSB = 0.0003;
+      registers.R_SHUNT_CAL = 5243;
+      break;
+    case 250:
+      // True LSB = 0.00050001, Max current=204.799
+      registers.CURRENT_LSB = 0.0005;
+      registers.R_SHUNT_CAL = 5243;
+      break;
+    case 500:
+      registers.CURRENT_LSB = 0.001;
+      registers.R_SHUNT_CAL = 5243;
+      break;
+    case 1000:
+      registers.CURRENT_LSB = 0.002;
+      registers.R_SHUNT_CAL = 5243;
+      break;
+    }
+  }
+  if (registers.shunt_millivolt == 75)
+  {
+    switch (registers.shunt_max_current)
+    {
+    case 300:
+      // True LSB=0.0005000, Max Current=163.84
+      registers.CURRENT_LSB = 0.0005;
+      registers.R_SHUNT_CAL = 6554;
+      break;
+    }
+  }
 }
 
 void setup()
 {
 
-  //Did we have a watchdog reboot?
+  // Did we have a watchdog reboot?
   if (RSTCTRL.RSTFR & RSTCTRL_WDRF_bm)
   {
     // Must be first line of code
@@ -895,7 +940,7 @@ void setup()
 
   if (ReadConfigFromEEPROM((uint8_t *)&registers, sizeof(eeprom_regs)) == false)
   {
-    //Flash RED led 5 times to indicate facory reset
+    // Flash RED led 5 times to indicate facory reset
     for (size_t i = 0; i < 5; i++)
     {
       RedLED(true);
@@ -904,63 +949,62 @@ void setup()
       delay(200);
     }
 
-    //EEPROM is invalid, so apply "factory" defaults
+    // EEPROM is invalid, so apply "factory" defaults
 
-    //Clear structure
+    // Clear structure
     memset(&registers, 0, sizeof(eeprom_regs));
 
-    //Conversion times for voltage and current = 2074us
-    //temperature = 540us
-    //256 times sample averaging
-    // 1111 = Continuous bus, shunt voltage and temperature
-    // 110 = 6h = 2074 µs BUS VOLT
-    // 110 = 6h = 2074 µs CURRENT
-    // 100 = 4h = 540 µs TEMPERATURE
-    // 101 = 5h = 256 ADC sample averaging count
-    // B1111 110 110 100 101
-    //                   AVG
-    registers.R_ADC_CONFIG = 0xFDA5;
+    // Conversion times for voltage and current = 2074us
+    // temperature = 540us
+    // 256 times sample averaging
+    //  MODE  = 1111 = Continuous bus, shunt voltage and temperature
+    //  VBUSCT= 111 = 6h = 4120µs BUS VOLT
+    //   VSHCT= 111 = 6h = 4120µs CURRENT
+    //    VTCT= 010 = 2h =  150µs TEMPERATURE
+    //     AVG= 100 = 4h = 128 ADC sample averaging count
+    //  B1111 111 111 010 100 = 0xFFD4
+    registers.R_ADC_CONFIG = 0xFFD4;
 
     registers.R_CONFIG = _BV(4); // ADCRANGE = 40.96mV scale
 
-    //Default 150A shunt @ 50mV scale
-    registers.R_SHUNT_CAL = 0x1000;
+    //Defaults for battery capacity/voltages
+    registers.batterycapacity_amphour = 280;
+    registers.fully_charged_voltage = 3.50 * 16;
+    registers.tail_current_amps = 20;
+    registers.charge_efficiency_factor = 99.5;
+
+    // Default 150A shunt @ 50mV scale
     registers.shunt_max_current = 150;
     registers.shunt_millivolt = 50;
 
-    registers.batterycapacity_amphour = 200;
-    registers.fully_charged_voltage = 52.8;
-    registers.tail_current_amps = 5;
-    registers.charge_efficiency_factor = 99.5;
-
-    //SLOWALERT = Wait for full sample averaging time before triggering alert (about 1.5 seconds)
+    // SLOWALERT = Wait for full sample averaging time before triggering alert (about 1.5 seconds)
     registers.R_DIAG_ALRT = bit(DIAG_ALRT_FIELD::SLOWALERT);
 
-    //This is not enabled by default
-    //The 16 bit register provides a resolution of 1ppm/°C/LSB
+    // This is not enabled by default
+    // The 16 bit register provides a resolution of 1ppm/°C/LSB
     registers.R_SHUNT_TEMPCO = 15;
 
-    //Read the defaults from the INA228 chip as a starting point
+    // Read the defaults from the INA228 chip as a starting point
     registers.R_SOVL = 0x7FFF;
     registers.R_SUVL = 0x8000;
-    //85volt max
-    registers.R_BOVL = 0x6A40; //i2c_readword(INA_REGISTER::BOVL);
+    // 85volt max
+    registers.R_BOVL = 0x6A40; // i2c_readword(INA_REGISTER::BOVL);
     registers.R_BUVL = 0;
-    registers.R_TEMP_LIMIT = 0x2800; //80 degrees C
+    registers.R_TEMP_LIMIT = 0x2800; // 80 degrees C
 
     CalculateLSB();
 
-    //Default Power limit = 5kW
-    registers.R_PWR_LIMIT = (uint16_t)((5000.0 / registers.CURRENT_LSB / 3.2) / 256.0); //5kW
+    // Default Power limit = 5kW
+    registers.R_PWR_LIMIT = (uint16_t)((5000.0 / registers.CURRENT_LSB / 3.2) / 256.0); // 5kW
 
-    //By default, trigger relay on all alerts
+    // By default, trigger relay on all alerts
     registers.relay_trigger_bitmap = ALL_ALERT_BITS;
+
+    // Default SOC% at 60% - this also defaults milliamphour_in to half the battery capacity
+    SetSOC(6000);
   }
 
-  //0% at power on
-  SOC = 0;
-
-  //Flash LED to indicate normal boot up
+  // Flash LED to indicate normal boot up
   for (size_t i = 0; i < 6; i++)
   {
     GreenLED(true);
@@ -979,16 +1023,16 @@ void setup()
 
   ReadJumperPins();
 
-  //Disable RS485 receiver (debug!)
-  //PORTB.OUTSET = PIN0_bm;
-  //PORTB.PIN0CTRL = 0;
+  // Disable RS485 receiver (debug!)
+  // PORTB.OUTSET = PIN0_bm;
+  // PORTB.PIN0CTRL = 0;
 
   ConfigureI2C();
 
-  //Serial uses PB2/PB3 and PB0 for XDIR
+  // Serial uses PB2/PB3 and PB0 for XDIR
   Serial.begin(ModBusBaudRate, MODBUSSERIALCONFIG);
 
-  //0x01= Enables RS-485 mode with control of an external line driver through a dedicated Transmit Enable (TE) pin.
+  // 0x01= Enables RS-485 mode with control of an external line driver through a dedicated Transmit Enable (TE) pin.
   USART0.CTRLA |= B00000001;
 
   wdt_triggered = false;
@@ -996,22 +1040,24 @@ void setup()
   modbus_configure(&Serial, ModBusBaudRate);
 }
 
-//Bus voltage output. Two's complement value, however always positive.  Value in bits 23 to 4
+// Bus voltage output. Two's complement value, however always positive.  Value in bits 23 to 4
 double BusVoltage()
 {
-
-  //195.3125uV per LSB
-  return (double)195.3125 * (double)i2c_readInt24(INA_REGISTER::VBUS) / 1000000.0;
+  uint32_t busVoltage = readUInt24(INA_REGISTER::VBUS);
+  // The accuracy is 20bits and 195.3125uV is the LSB
+  // Use integer math where possible
+  uint64_t busVoltage_mV = (uint64_t)busVoltage * 1953125 / 10000000; // conversion to get mV
+  return (double)busVoltage_mV / (double)1000.0;
 }
 
-//Shunt voltage in MILLIVOLTS mV (Two's complement value)
+// Shunt voltage in MILLIVOLTS mV
 double ShuntVoltage()
 {
-  //78.125 nV/LSB
-  return (double)78.125 * (double)i2c_readInt24(INA_REGISTER::VSHUNT) / 1e+6;
+  // 78.125 nV/LSB
+  return (double)((uint64_t)readInt20(INA_REGISTER::VSHUNT) * 78125) / 1000000000.0;
 }
 
-//Energy in JOULES
+// Energy in JOULES
 double Energy()
 {
   uint64_t energy = i2c_readUint40(INA_REGISTER::ENERGY);
@@ -1024,26 +1070,26 @@ double Energy()
 // NEGATIVE value means battery is being charged
 int32_t ChargeInCoulombsAsInt()
 {
-  //Calculated charge output. Output value is in Coulombs.Two's complement value.  40bit number
-  //int64 on an 8 bit micro!
+  // Calculated charge output. Output value is in Coulombs.Two's complement value.  40bit number
+  // int64 on an 8 bit micro!
   return registers.CURRENT_LSB * (double)i2c_readInt40(INA_REGISTER::CHARGE);
 }
 
-//Calculated power output.  Output value in watts. Unsigned representation. Positive value.
+// Calculated power output.  Output value in watts. Unsigned representation. Positive value.
 double Power()
 {
-  //POWER Power [W] = 3.2 x CURRENT_LSB x POWER
+  // POWER Power [W] = 3.2 x CURRENT_LSB x POWER
   return (double)i2c_readUint24(INA_REGISTER::POWER) * (double)3.2 * registers.CURRENT_LSB;
 }
 
-//The INA228 device has an internal temperature sensor which can measure die temperature from –40 °C to +125°C.
+// The INA228 device has an internal temperature sensor which can measure die temperature from –40 °C to +125°C.
 double DieTemperature()
 {
-  //The accuracy of the temperature sensor is ±2 °C across the operational temperature range. The temperature
-  //value is stored inside the DIETEMP register and can be read through the digital interface
-  //Internal die temperature measurement. Two's complement value. Conversion factor: 7.8125 m°C/LSB
+  // The accuracy of the temperature sensor is ±2 °C across the operational temperature range. The temperature
+  // value is stored inside the DIETEMP register and can be read through the digital interface
+  // Internal die temperature measurement. Two's complement value. Conversion factor: 7.8125 m°C/LSB
 
-  //Case unsigned to int16 to cope with negative temperatures
+  // Case unsigned to int16 to cope with negative temperatures
   double dietemp = (int16_t)i2c_readword(INA_REGISTER::DIETEMP);
 
   return dietemp * (double)0.0078125;
@@ -1051,28 +1097,28 @@ double DieTemperature()
 
 double TemperatureLimit()
 {
-  //Case unsigned to int16 to cope with negative temperatures
+  // Case unsigned to int16 to cope with negative temperatures
   double temp = (int16_t)i2c_readword(INA_REGISTER::TEMP_LIMIT);
   return temp * (double)0.0078125;
 }
 
-//Calculated current output in Amperes.
-//In the way this circuit is designed, NEGATIVE current indicates DISCHARGE of the battery
-//POSITIVE current indicates CHARGE of the battery
+// Calculated current output in Amperes.
+// In the way this circuit is designed, NEGATIVE current indicates DISCHARGE of the battery
+// POSITIVE current indicates CHARGE of the battery
 double Current()
 {
-  //Current. Two's complement value.
-  return -(registers.CURRENT_LSB * (double)i2c_readInt24(INA_REGISTER::CURRENT));
+  // Current. Two's complement value.
+  return -(registers.CURRENT_LSB * (double)readInt20(INA_REGISTER::CURRENT));
 }
 
 ISR(PORTB_PORT_vect)
 {
   uint8_t flags = PORTB.INTFLAGS;
-  PORTB.INTFLAGS = flags; //clear flags
+  PORTB.INTFLAGS = flags; // clear flags
 
   if (flags && PIN1_bm)
   {
-    //INA228 has triggered an ALERT interrupt
+    // INA228 has triggered an ALERT interrupt
     RedLED(true);
     ALERT_TRIGGERED = true;
   }
@@ -1086,26 +1132,26 @@ uint16_t bitFlags()
 
   if (config & bit(5))
   {
-    //Temperature compensation
+    // Temperature compensation
     flag1 = flag1 | B00000010;
   }
 
   if (config & bit(4))
   {
-    //ADC Range
-    //0h = ±163.84 mV, 1h = ± 40.96 mV
+    // ADC Range
+    // 0h = ±163.84 mV, 1h = ± 40.96 mV
     flag1 = flag1 | B00000001;
   }
 
   uint16_t flag2 = registers.relay_trigger_bitmap & ALL_ALERT_BITS;
 
-  //Relaystate (bit 2)
+  // Relaystate (bit 2)
   if (relay_state)
   {
     flag2 = flag2 | B00000010;
   }
 
-  //Bit 1 is factory reset - always 0 when read
+  // Bit 1 is factory reset - always 0 when read
   flag2 = flag2 & B11111110;
 
   return (flag1 << 8) | flag2;
@@ -1113,7 +1159,7 @@ uint16_t bitFlags()
 
 uint16_t ReadHoldingRegister(uint16_t address)
 {
-  //Temporary variables to hold the register data
+  // Temporary variables to hold the register data
   static DoubleUnionType v;
   static DoubleUnionType c;
   static DoubleUnionType p;
@@ -1134,7 +1180,7 @@ uint16_t ReadHoldingRegister(uint16_t address)
   {
   case 0:
   {
-    //Voltage
+    // Voltage
     v.dblvalue = BusVoltage();
     return v.word[0];
     break;
@@ -1142,14 +1188,14 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   case 1:
   {
-    //Voltage
+    // Voltage
     return v.word[1];
     break;
   }
 
   case 2:
   {
-    //Current
+    // Current
     c.dblvalue = Current();
     return c.word[0];
     break;
@@ -1157,56 +1203,56 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   case 3:
   {
-    //Current
+    // Current
     return c.word[1];
     break;
   }
 
   case 4:
   {
-    //milliamphour_out
+    // milliamphour_out
     return (uint16_t)(milliamphour_out >> 16);
     break;
   }
 
   case 5:
   {
-    //milliamphour_out (low 16 bits)
+    // milliamphour_out (low 16 bits)
     return (uint16_t)milliamphour_out;
     break;
   }
 
   case 6:
   {
-    //milliamphour_in
+    // milliamphour_in
     return (uint16_t)(milliamphour_in >> 16);
     break;
   }
 
   case 7:
   {
-    //milliamphour_in (low 16 bits)
+    // milliamphour_in (low 16 bits)
     return (uint16_t)milliamphour_in;
     break;
   }
 
   case 8:
   {
-    //temperature
+    // temperature
     return (int16_t)DieTemperature();
     break;
   }
 
   case 9:
   {
-    //Various flags
+    // Various flags
     return bitFlags();
     break;
   }
 
   case 10:
   {
-    //Power
+    // Power
     p.dblvalue = Power();
     return p.word[0];
     break;
@@ -1214,14 +1260,14 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   case 11:
   {
-    //Power
+    // Power
     return p.word[1];
     break;
   }
 
   case 12:
   {
-    //Shunt mV
+    // Shunt mV
     shuntv.dblvalue = ShuntVoltage();
     return shuntv.word[0];
     break;
@@ -1229,7 +1275,7 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   case 13:
   {
-    //Shunt mV
+    // Shunt mV
     return shuntv.word[1];
     break;
   }
@@ -1311,28 +1357,28 @@ uint16_t ReadHoldingRegister(uint16_t address)
   case 26:
   {
     //|40027|State of charge % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 8012 = 80.12%, 100 = 1.00%)
-    SOC = CalculateSOC();
-    return SOC;
+    return CalculateSOC();
+    // return SOC;
     break;
   }
   case 27:
   {
-    //SHUNT_CAL register
+    // SHUNT_CAL register
     return i2c_readword(INA_REGISTER::SHUNT_CAL);
     break;
   }
 
   case 28:
   {
-    //temperature limit
+    // temperature limit
     return (int16_t)TemperatureLimit();
     break;
   }
 
   case 29:
   {
-    //Bus Overvoltage (overvoltage protection).
-    //Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
+    // Bus Overvoltage (overvoltage protection).
+    // Unsigned representation, positive value only. Conversion factor: 3.125 mV/LSB.
     BusOverVolt.dblvalue = ((double)(uint16_t)i2c_readword(INA_REGISTER::BOVL)) * 0.003125F;
     return BusOverVolt.word[0];
     break;
@@ -1359,10 +1405,10 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   case 33:
   {
-    //Shunt Over Voltage Limit (current limit)
+    // Shunt Over Voltage Limit (current limit)
     int16_t value = i2c_readword(INA_REGISTER::SOVL);
 
-    //1.25 µV/LSB
+    // 1.25 µV/LSB
     ShuntOverCurrentLimit.dblvalue = ((double)value / 1000 * 1.25) / full_scale_adc * registers.full_scale_current;
 
     return ShuntOverCurrentLimit.word[0];
@@ -1376,11 +1422,8 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   case 35:
   {
-    //Shunt UNDER Voltage Limit (under current limit)
+    // Shunt UNDER Voltage Limit (under current limit)
     int16_t value = i2c_readword(INA_REGISTER::SUVL);
-
-    //const double x = (0.725 / full_scale_current) * full_scale_adc;
-    //int16_t CurrentOverThreshold = (x * 1000.0 / 1.24);
 
     ShuntUnderCurrentLimit.dblvalue = ((double)value / 1000 * 1.25) / full_scale_adc * registers.full_scale_current;
 
@@ -1395,7 +1438,7 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   case 37:
   {
-    //Shunt Over POWER LIMIT
+    // Shunt Over POWER LIMIT
     PowerLimit.dblvalue = (uint16_t)i2c_readword(INA_REGISTER::PWR_LIMIT);
     PowerLimit.dblvalue = PowerLimit.dblvalue * 256 * 3.2 * registers.CURRENT_LSB;
     return PowerLimit.word[0];
@@ -1409,58 +1452,58 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   case 39:
   {
-    //Shunt Temperature Coefficient
+    // Shunt Temperature Coefficient
     return (uint16_t)i2c_readword(INA_REGISTER::SHUNT_TEMPCO);
     break;
   }
 
   case 40:
   {
-    //INAXXX chip model number (should always be 0x0228)
+    // INAXXX chip model number (should always be 0x0228)
     uint16_t dieid = i2c_readword(INA_REGISTER::DIE_ID);
     dieid = (dieid & 0xFFF0) >> 4;
     return dieid;
     break;
   }
 
-  //These settings would probably be better in a 0x2B function code
-  //https://modbus.org/docs/Modbus_Application_Protocol_V1_1b.pdf
+  // These settings would probably be better in a 0x2B function code
+  // https://modbus.org/docs/Modbus_Application_Protocol_V1_1b.pdf
   case 41:
   {
-    //GITHUB version
+    // GITHUB version
     return GIT_VERSION_B1;
     break;
   }
   case 42:
   {
-    //GITHUB version
+    // GITHUB version
     return GIT_VERSION_B2;
     break;
   }
 
   case 43:
   {
-    //COMPILE_DATE_TIME_EPOCH
+    // COMPILE_DATE_TIME_EPOCH
     uint32_t x = COMPILE_DATE_TIME_UTC_EPOCH >> 16;
     return (uint16_t)x;
     break;
   }
   case 44:
   {
-    //COMPILE_DATE_TIME_EPOCH
+    // COMPILE_DATE_TIME_EPOCH
     return (uint16_t)COMPILE_DATE_TIME_UTC_EPOCH;
     break;
   }
   case 45:
   {
-    //Watchdog timer trigger count (like error counter)
+    // Watchdog timer trigger count (like error counter)
     return wdt_triggered_count;
     break;
   }
 
   case 46:
   {
-    //40040
+    // 40040
     return i2c_readword(INA_REGISTER::CONFIG);
     break;
   }
@@ -1520,7 +1563,7 @@ uint16_t ReadHoldingRegister(uint16_t address)
     break;
   }
 
-  } //end switch
+  } // end switch
 
   return 0;
 }
@@ -1562,10 +1605,10 @@ void loop()
       RedLED(false);
     }
 
-    //Apply relay_trigger_bitmap bitmask over the top of the alerts, so we only trigger on specific events
+    // Apply relay_trigger_bitmap bitmask over the top of the alerts, so we only trigger on specific events
     relay_state = ((alert & registers.relay_trigger_bitmap) != 0);
 
-    //Turn relay on/off
+    // Turn relay on/off
     if (relay_state)
     {
       PORTA.OUTSET = RELAY_PIN_BITMAP;
@@ -1589,72 +1632,72 @@ void loop()
 
     RedLED(true);
 
-    //Do it again in X seconds
+    // Do it again in X seconds
     timer = millis() + loop_delay_ms;
 
     double voltage = BusVoltage();
     double current = Current();
 
-    //We amp-hour count using units of 18 coulombs = 5mAh, to avoid rounding issues
+    // We amp-hour count using units of 18 coulombs = 5mAh, to avoid rounding issues
 
-    //If we don't have a voltage reading, ignore the coulombs - also means
-    //Ah counting won't work without voltage reading on the INA228 chip
+    // If we don't have a voltage reading, ignore the coulombs - also means
+    // Ah counting won't work without voltage reading on the INA228 chip
     if (voltage > 0)
     {
       int32_t charge_coulombs = ChargeInCoulombsAsInt();
       int32_t difference = charge_coulombs - last_charge_coulombs;
 
-      //Have we used up more than 5mAh of energy?
-      //if not, ignore for now and await next cycle
+      // Have we used up more than 5mAh of energy?
+      // if not, ignore for now and await next cycle
       if (abs(difference) >= 18)
       {
         if (difference > 0)
         {
-          //Amp hour out
-          //Integer divide (18 coulombs)
+          // Amp hour out
+          // Integer divide (18 coulombs)
           int32_t integer_divide = (difference / 18);
-          //Subtract remainder
+          // Subtract remainder
           last_charge_coulombs = charge_coulombs - (difference - (integer_divide * 18));
-          //Chunks of 5mAh
+          // Chunks of 5mAh
           milliamphour_out += integer_divide * 5;
         }
         else
         {
-          //Make it positive, for counting amp hour in
+          // Make it positive, for counting amp hour in
           difference = abs(difference);
           int32_t integer_divide = (difference / 18);
-          //Add on remainder
+          // Add on remainder
           last_charge_coulombs = charge_coulombs + (difference - (integer_divide * 18));
-          //chunks of 5mAh
+          // chunks of 5mAh
           milliamphour_in += integer_divide * 5;
         }
       }
     }
 
-    //Periodically we need to reset the energy register to prevent it overflowing
-    //if we do this too frequently we get incorrect readings over the long term
-    //360000 = 100Amp Hour
+    // Periodically we need to reset the energy register to prevent it overflowing
+    // if we do this too frequently we get incorrect readings over the long term
+    // 360000 = 100Amp Hour
     if (abs(last_charge_coulombs) > (int32_t)360000)
     {
       ResetChargeEnergyRegisters();
       last_charge_coulombs = 0;
     }
 
-    //Now to test if we need to reset SOC to 100% ?
-    //Check if voltage is over the fully_charged_voltage and current UNDER tail_current_amps
+    // Now to test if we need to reset SOC to 100% ?
+    // Check if voltage is over the fully_charged_voltage and current UNDER tail_current_amps
     if (voltage > registers.fully_charged_voltage && current > 0 && current < registers.tail_current_amps)
     {
-      //Battery has reached fully charged so wait for time counter
+      // Battery has reached fully charged so wait for time counter
       soc_reset_counter++;
 
       // Test if counter has reached 3 minutes, indicating fully charge battery
-      if (soc_reset_counter >= ((3 * 60) / (loop_delay_ms/1000)))
+      if (soc_reset_counter >= ((3 * 60) / (loop_delay_ms / 1000)))
       {
-        //Now we reset the SOC, by clearing the registers, at this point SOC returns to 100%
+        // Now we reset the SOC, by clearing the registers, at this point SOC returns to 100%
 
-        //This does have an annoying "feature" of clearing down todays AH counts :-(
-        //TODO: FIX THIS - probably need a set of shadow variables to hold the internal SOC and AH counts
-        //                 but then when/how do we reset the Ah counts?
+        // This does have an annoying "feature" of clearing down todays AH counts :-(
+        // TODO: FIX THIS - probably need a set of shadow variables to hold the internal SOC and AH counts
+        //                  but then when/how do we reset the Ah counts?
 
         max_soc_reset_counter = soc_reset_counter;
         ResetChargeEnergyRegisters();
@@ -1666,15 +1709,15 @@ void loop()
     }
     else
     {
-      //Voltage or current is out side of monitoring limits, so reset timer count
+      // Voltage or current is out side of monitoring limits, so reset timer count
       soc_reset_counter = 0;
     }
 
     if (alert == 0)
     {
-      //Turn LED off if alert is not active
+      // Turn LED off if alert is not active
       RedLED(false);
-    } //end if
+    } // end if
 
-  } //end if
+  } // end if
 }

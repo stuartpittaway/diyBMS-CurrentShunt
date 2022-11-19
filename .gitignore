@@ -2,3 +2,4 @@
 *.kicad_pcb-bak
 *.sch-bak
 Code/diybmsCurrentShunt/include/EmbeddedFiles_Defines.h
+Code/diybmsCurrentShunt/.vscode/extensions.json
