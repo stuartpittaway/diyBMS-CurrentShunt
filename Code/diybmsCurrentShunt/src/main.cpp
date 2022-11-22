@@ -878,6 +878,12 @@ void CalculateLSB()
   registers.CURRENT_LSB = registers.shunt_max_current / (double)0x80000;
   registers.R_SHUNT_CAL = 4L * (13107200000L * registers.CURRENT_LSB * registers.RSHUNT);
 
+  //Deliberately reduce calibration by 2.5%, which appears to be the loses seen in the current monitor circuit design 
+  //(or shunt resistance tollerance)
+  //You can always configure this value through the web gui - "Calibration" value.
+  registers.R_SHUNT_CAL = ((uint32_t)registers.R_SHUNT_CAL*985)/1000;
+
+/*
   // Hardcoded "good values" based on the dev.ti.com calculation
   // this attempts to avoid floating point issues with rounding in further calculations
   if (registers.shunt_millivolt == 50)
@@ -925,6 +931,7 @@ void CalculateLSB()
       break;
     }
   }
+  */
 }
 
 void setup()
