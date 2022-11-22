@@ -101,8 +101,14 @@ const uint8_t INA228_I2C_Address = B1000000;
 
 const uint16_t loop_delay_ms = 2000;
 
+uint32_t milliamphour_out_lifetime = 0;
+uint32_t milliamphour_in_lifetime = 0;
+
 uint32_t milliamphour_out = 0;
 uint32_t milliamphour_in = 0;
+
+uint32_t milliamphour_out_offset = 0;
+uint32_t milliamphour_in_offset = 0;
 
 uint16_t ModBusBaudRate = MODBUSDEFAULTBAUDRATE;
 
@@ -169,11 +175,9 @@ uint16_t CalculateSOC()
 {
   double milliamphour_in_scaled = ((double)milliamphour_in / 100.0) * registers.charge_efficiency_factor;
   double milliamphour_batterycapacity = 1000.0 * (uint32_t)registers.batterycapacity_amphour;
-
   double difference = milliamphour_in_scaled - milliamphour_out;
 
-  double answer = 100 * (milliamphour_batterycapacity + difference) / milliamphour_batterycapacity;
-
+  double answer = 100 * (difference / milliamphour_batterycapacity);
   if (answer < 0)
   {
     // We have taken more out of the battery than put in, so must be zero SoC (or more likely out of calibration)
@@ -527,9 +531,12 @@ void SetINA228ConfigurationRegisters()
 void SetSOC(uint16_t value)
 {
   // Assume battery is fully charged
-  milliamphour_in = 0;
+  milliamphour_in = 1000 * (uint32_t)registers.batterycapacity_amphour;
   // And we have consumed this much...
-  milliamphour_out = (1 - (value / 10000)) * (1000 * (uint32_t)registers.batterycapacity_amphour);
+  milliamphour_out = (1.0 - ((float)value / 10000.0)) * milliamphour_in;
+
+  milliamphour_out_offset = milliamphour_out;
+  milliamphour_in_offset = milliamphour_in;
 }
 
 void SetINA228Registers()
@@ -810,9 +817,9 @@ void ConfigureI2C()
   dieid = (dieid & 0xFFF0) >> 4;
   // INA228 chip
   // DONT BLOCK - VERSION MAY CHANGE
-  //if (dieid != 0x228)
+  // if (dieid != 0x228)
   //{
-    //blinkPattern(err_WrongChip);
+  // blinkPattern(err_WrongChip);
   //}
 
   // Configure our registers (after reset)
@@ -866,7 +873,7 @@ void CalculateLSB()
   //                     R_SHUNT_CAL = 52428800000*0.000286102294921875*0.00033333333 = 4999.999 = 5000
 
   // Calculate CURRENT_LSB and R_SHUNT_CAL values
-  //registers.full_scale_current = ((double)registers.shunt_max_current / (double)registers.shunt_millivolt) * full_scale_adc;
+  // registers.full_scale_current = ((double)registers.shunt_max_current / (double)registers.shunt_millivolt) * full_scale_adc;
   registers.RSHUNT = ((double)registers.shunt_millivolt / 1000.0) / (double)registers.shunt_max_current;
   registers.CURRENT_LSB = registers.shunt_max_current / (double)0x80000;
   registers.R_SHUNT_CAL = 4L * (13107200000L * registers.CURRENT_LSB * registers.RSHUNT);
@@ -1000,6 +1007,41 @@ void setup()
     // By default, trigger relay on all alerts
     registers.relay_trigger_bitmap = ALL_ALERT_BITS;
 
+    // Flash LED to indicate normal boot up
+    for (size_t i = 0; i < 6; i++)
+    {
+      GreenLED(true);
+      if (wdt_triggered)
+      {
+        RedLED(true);
+      }
+      delay(50);
+      GreenLED(false);
+      if (wdt_triggered)
+      {
+        RedLED(false);
+      }
+      delay(150);
+    }
+
+    ReadJumperPins();
+
+    // Disable RS485 receiver (debug!)
+    // PORTB.OUTSET = PIN0_bm;
+    // PORTB.PIN0CTRL = 0;
+
+    ConfigureI2C();
+
+    // Serial uses PB2/PB3 and PB0 for XDIR
+    Serial.begin(ModBusBaudRate, MODBUSSERIALCONFIG);
+
+    // 0x01= Enables RS-485 mode with control of an external line driver through a dedicated Transmit Enable (TE) pin.
+    USART0.CTRLA |= B00000001;
+
+    wdt_triggered = false;
+
+    modbus_configure(&Serial, ModBusBaudRate);
+
     // Default SOC% at 60%
     uint16_t soc = 6000;
 
@@ -1009,7 +1051,7 @@ void setup()
 
     if (v > 20 && v < 30)
     {
-      //Scale up to use the 48V scale
+      // Scale up to use the 48V scale
       v = v * 2;
     }
 
@@ -1038,41 +1080,6 @@ void setup()
 
     SetSOC(soc);
   }
-
-  // Flash LED to indicate normal boot up
-  for (size_t i = 0; i < 6; i++)
-  {
-    GreenLED(true);
-    if (wdt_triggered)
-    {
-      RedLED(true);
-    }
-    delay(50);
-    GreenLED(false);
-    if (wdt_triggered)
-    {
-      RedLED(false);
-    }
-    delay(150);
-  }
-
-  ReadJumperPins();
-
-  // Disable RS485 receiver (debug!)
-  // PORTB.OUTSET = PIN0_bm;
-  // PORTB.PIN0CTRL = 0;
-
-  ConfigureI2C();
-
-  // Serial uses PB2/PB3 and PB0 for XDIR
-  Serial.begin(ModBusBaudRate, MODBUSSERIALCONFIG);
-
-  // 0x01= Enables RS-485 mode with control of an external line driver through a dedicated Transmit Enable (TE) pin.
-  USART0.CTRLA |= B00000001;
-
-  wdt_triggered = false;
-
-  modbus_configure(&Serial, ModBusBaudRate);
 }
 
 // Bus voltage output. Two's complement value, however always positive.  Value in bits 23 to 4
@@ -1249,28 +1256,28 @@ uint16_t ReadHoldingRegister(uint16_t address)
   case 4:
   {
     // milliamphour_out
-    return (uint16_t)(milliamphour_out >> 16);
+    return (uint16_t)((milliamphour_out - milliamphour_out_offset) >> 16);
     break;
   }
 
   case 5:
   {
     // milliamphour_out (low 16 bits)
-    return (uint16_t)milliamphour_out;
+    return (uint16_t)(milliamphour_out - milliamphour_out_offset);
     break;
   }
 
   case 6:
   {
     // milliamphour_in
-    return (uint16_t)(milliamphour_in >> 16);
+    return (uint16_t)((milliamphour_in - milliamphour_in_offset) >> 16);
     break;
   }
 
   case 7:
   {
     // milliamphour_in (low 16 bits)
-    return (uint16_t)milliamphour_in;
+    return (uint16_t)(milliamphour_in - milliamphour_in_offset);
     break;
   }
 
@@ -1698,6 +1705,7 @@ void loop()
           last_charge_coulombs = charge_coulombs - (difference - (integer_divide * 18));
           // Chunks of 5mAh
           milliamphour_out += integer_divide * 5;
+          milliamphour_out_lifetime += integer_divide * 5;
         }
         else
         {
@@ -1708,6 +1716,7 @@ void loop()
           last_charge_coulombs = charge_coulombs + (difference - (integer_divide * 18));
           // chunks of 5mAh
           milliamphour_in += integer_divide * 5;
+          milliamphour_in_lifetime += integer_divide * 5;
         }
       }
     }
@@ -1740,9 +1749,10 @@ void loop()
         max_soc_reset_counter = soc_reset_counter;
         ResetChargeEnergyRegisters();
         last_charge_coulombs = 0;
-        milliamphour_in = 0;
-        milliamphour_out = 0;
+        // milliamphour_in = 0;
+        // milliamphour_out = 0;
         soc_reset_counter = 0;
+        SetSOC(10000);
       }
     }
     else
