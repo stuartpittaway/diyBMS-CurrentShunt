@@ -878,60 +878,60 @@ void CalculateLSB()
   registers.CURRENT_LSB = registers.shunt_max_current / (double)0x80000;
   registers.R_SHUNT_CAL = 4L * (13107200000L * registers.CURRENT_LSB * registers.RSHUNT);
 
-  //Deliberately reduce calibration by 2.5%, which appears to be the loses seen in the current monitor circuit design 
+  // Deliberately reduce calibration by 2.5%, which appears to be the loses seen in the current monitor circuit design
   //(or shunt resistance tollerance)
-  //You can always configure this value through the web gui - "Calibration" value.
-  registers.R_SHUNT_CAL = ((uint32_t)registers.R_SHUNT_CAL*985)/1000;
+  // You can always configure this value through the web gui - "Calibration" value.
+  registers.R_SHUNT_CAL = ((uint32_t)registers.R_SHUNT_CAL * 985) / 1000;
 
-/*
-  // Hardcoded "good values" based on the dev.ti.com calculation
-  // this attempts to avoid floating point issues with rounding in further calculations
-  if (registers.shunt_millivolt == 50)
-  {
-    switch (registers.shunt_max_current)
+  /*
+    // Hardcoded "good values" based on the dev.ti.com calculation
+    // this attempts to avoid floating point issues with rounding in further calculations
+    if (registers.shunt_millivolt == 50)
     {
-    case 50:
-      // True LSB=0.00010000, Max Current=40.96
-      registers.CURRENT_LSB = 0.0001;
-      registers.R_SHUNT_CAL = 5243;
-      break;
-    case 100:
-      // True LSB=0.000200004, Max Current=81.92
-      registers.CURRENT_LSB = 0.0002;
-      registers.R_SHUNT_CAL = 5243;
-      break;
-    case 150:
-      // True LSB = 0.000300007, Max current=122.880
-      registers.CURRENT_LSB = 0.0003;
-      registers.R_SHUNT_CAL = 5243;
-      break;
-    case 250:
-      // True LSB = 0.00050001, Max current=204.799
-      registers.CURRENT_LSB = 0.0005;
-      registers.R_SHUNT_CAL = 5243;
-      break;
-    case 500:
-      registers.CURRENT_LSB = 0.001;
-      registers.R_SHUNT_CAL = 5243;
-      break;
-    case 1000:
-      registers.CURRENT_LSB = 0.002;
-      registers.R_SHUNT_CAL = 5243;
-      break;
+      switch (registers.shunt_max_current)
+      {
+      case 50:
+        // True LSB=0.00010000, Max Current=40.96
+        registers.CURRENT_LSB = 0.0001;
+        registers.R_SHUNT_CAL = 5243;
+        break;
+      case 100:
+        // True LSB=0.000200004, Max Current=81.92
+        registers.CURRENT_LSB = 0.0002;
+        registers.R_SHUNT_CAL = 5243;
+        break;
+      case 150:
+        // True LSB = 0.000300007, Max current=122.880
+        registers.CURRENT_LSB = 0.0003;
+        registers.R_SHUNT_CAL = 5243;
+        break;
+      case 250:
+        // True LSB = 0.00050001, Max current=204.799
+        registers.CURRENT_LSB = 0.0005;
+        registers.R_SHUNT_CAL = 5243;
+        break;
+      case 500:
+        registers.CURRENT_LSB = 0.001;
+        registers.R_SHUNT_CAL = 5243;
+        break;
+      case 1000:
+        registers.CURRENT_LSB = 0.002;
+        registers.R_SHUNT_CAL = 5243;
+        break;
+      }
     }
-  }
-  if (registers.shunt_millivolt == 75)
-  {
-    switch (registers.shunt_max_current)
+    if (registers.shunt_millivolt == 75)
     {
-    case 300:
-      // True LSB=0.0005000, Max Current=163.84
-      registers.CURRENT_LSB = 0.0005;
-      registers.R_SHUNT_CAL = 6554;
-      break;
+      switch (registers.shunt_max_current)
+      {
+      case 300:
+        // True LSB=0.0005000, Max Current=163.84
+        registers.CURRENT_LSB = 0.0005;
+        registers.R_SHUNT_CAL = 6554;
+        break;
+      }
     }
-  }
-  */
+    */
 }
 
 void setup()
@@ -1320,7 +1320,9 @@ uint16_t ReadHoldingRegister(uint16_t address)
   case 12:
   {
     // Shunt mV
-    shuntv.dblvalue = ShuntVoltage();
+    int32_t temp = ShuntVoltage() * 10000;
+    shuntv.word[0] = (uint16_t)(temp >> 16);
+    shuntv.word[1] = (uint16_t)(temp);
     return shuntv.word[0];
     break;
   }
