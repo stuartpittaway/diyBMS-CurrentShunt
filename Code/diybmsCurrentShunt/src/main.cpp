@@ -104,6 +104,9 @@ const uint16_t loop_delay_ms = 2000;
 uint32_t milliamphour_out_lifetime = 0;
 uint32_t milliamphour_in_lifetime = 0;
 
+uint32_t daily_milliamphour_out = 0;
+uint32_t daily_milliamphour_in = 0;
+
 uint32_t milliamphour_out = 0;
 uint32_t milliamphour_in = 0;
 
@@ -535,8 +538,13 @@ void SetSOC(uint16_t value)
   // And we have consumed this much...
   milliamphour_out = (1.0 - ((float)value / 10000.0)) * milliamphour_in;
 
+  // Zero out readings using the offsets
   milliamphour_out_offset = milliamphour_out;
   milliamphour_in_offset = milliamphour_in;
+
+  // Reset the daily counters
+  daily_milliamphour_in = 0;
+  daily_milliamphour_out = 0;
 }
 
 void SetINA228Registers()
@@ -573,11 +581,15 @@ bool SetRegister(uint16_t address, uint16_t value)
   case 6:
   //|40022|Fully charged voltage (4 byte double)
   case 21:
-    //|40024|Tail current (Amps) (4 byte double)
+  //|40024|Tail current (Amps) (4 byte double)
   case 23:
+  // Temperature limit (signed int16)
   case 29:
+  // Bus Overvoltage (overvoltage protection)
   case 31:
+  // BusUnderVolt
   case 33:
+  // Shunt Over Voltage Limit (current limit)
   case 35:
   case 37:
   {
@@ -649,6 +661,23 @@ bool SetRegister(uint16_t address, uint16_t value)
     SetINA228ConfigurationRegisters();
     break;
   }
+
+  // Allow reset of daily AH counters to ZERO
+  case 13:
+  case 14:
+  {
+    // Daily milliamphour_out (4 byte unsigned long uint32_t)
+    daily_milliamphour_out = 0;
+    break;
+  }
+  case 15:
+  case 16:
+  {
+    // Daily milliamphour_in (4 byte  unsigned long uint32_t)
+    daily_milliamphour_in = 0;
+    break;
+  }
+
   case 18:
   {
     registers.shunt_max_current = value;
@@ -720,7 +749,6 @@ bool SetRegister(uint16_t address, uint16_t value)
     registers.R_BOVL = newvalue.dblvalue / 0.003125F;
     break;
   }
-
   case 32:
   {
     // Bus under voltage
@@ -728,7 +756,6 @@ bool SetRegister(uint16_t address, uint16_t value)
     registers.R_BUVL = newvalue.dblvalue / 0.003125F;
     break;
   }
-
   case 34:
   {
     // Shunt Over Voltage Limit (current limit)
@@ -1054,6 +1081,7 @@ void setup()
 
     // We apply a "guestimate" to SoC based on voltage - not really accurate, but somewhere to start
     // only applicable to 24V/48V (16S) setups. These voltages should be the unloaded (no current flowing) voltage.
+    // Assumption that its LIFEPO4 cells we are using
     double v = BusVoltage();
 
     if (v > 20 && v < 30)
@@ -1319,33 +1347,30 @@ uint16_t ReadHoldingRegister(uint16_t address)
 
   case 12:
   {
-    // Shunt mV
-    int32_t temp = ShuntVoltage() * 10000;
-    shuntv.word[0] = (uint16_t)(temp >> 16);
-    shuntv.word[1] = (uint16_t)(temp);
-    return shuntv.word[0];
+    // milliamphour_out
+    return (uint16_t)(daily_milliamphour_out >> 16);
     break;
   }
-
   case 13:
   {
-    // Shunt mV
-    return shuntv.word[1];
+    // milliamphour_out (low 16 bits)
+    return (uint16_t)daily_milliamphour_out;
     break;
   }
 
   case 14:
   {
-    copy_current_lsb.dblvalue = registers.CURRENT_LSB;
-    return copy_current_lsb.word[0];
+    // milliamphour_out
+    return (uint16_t)(daily_milliamphour_in >> 16);
+    break;
+  }
+  case 15:
+  {
+    // milliamphour_out (low 16 bits)
+    return (uint16_t)daily_milliamphour_in;
     break;
   }
 
-  case 15:
-  {
-    return copy_current_lsb.word[1];
-    break;
-  }
   case 16:
   {
     copy_shunt_resistance.dblvalue = registers.RSHUNT;
@@ -1412,7 +1437,6 @@ uint16_t ReadHoldingRegister(uint16_t address)
   {
     //|40027|State of charge % (unsigned int16) (scale x100 eg. 10000 = 100.00%, 8012 = 80.12%, 100 = 1.00%)
     return CalculateSOC();
-    // return SOC;
     break;
   }
   case 27:
@@ -1421,14 +1445,12 @@ uint16_t ReadHoldingRegister(uint16_t address)
     return i2c_readword(INA_REGISTER::SHUNT_CAL);
     break;
   }
-
   case 28:
   {
     // temperature limit
     return (int16_t)TemperatureLimit();
     break;
   }
-
   case 29:
   {
     // Bus Overvoltage (overvoltage protection).
@@ -1437,26 +1459,22 @@ uint16_t ReadHoldingRegister(uint16_t address)
     return BusOverVolt.word[0];
     break;
   }
-
   case 30:
   {
     return BusOverVolt.word[1];
     break;
   }
-
   case 31:
   {
     BusUnderVolt.dblvalue = (double)i2c_readword(INA_REGISTER::BUVL) * 0.003125F;
     return BusUnderVolt.word[0];
     break;
   }
-
   case 32:
   {
     return BusUnderVolt.word[1];
     break;
   }
-
   case 33:
   {
     // Shunt Over Voltage Limit (current limit)
@@ -1473,7 +1491,6 @@ uint16_t ReadHoldingRegister(uint16_t address)
     return ShuntOverCurrentLimit.word[1];
     break;
   }
-
   case 35:
   {
     // Shunt UNDER Voltage Limit (under current limit)
@@ -1713,8 +1730,10 @@ void loop()
           // Subtract remainder
           last_charge_coulombs = charge_coulombs - (difference - (integer_divide * 18));
           // Chunks of 5mAh
-          milliamphour_out += integer_divide * 5;
-          milliamphour_out_lifetime += integer_divide * 5;
+          uint32_t a = integer_divide * 5;
+          milliamphour_out += a;
+          milliamphour_out_lifetime += a;
+          daily_milliamphour_out += a;
         }
         else
         {
@@ -1724,8 +1743,10 @@ void loop()
           // Add on remainder
           last_charge_coulombs = charge_coulombs + (difference - (integer_divide * 18));
           // chunks of 5mAh
-          milliamphour_in += integer_divide * 5;
-          milliamphour_in_lifetime += integer_divide * 5;
+          uint32_t a = integer_divide * 5;
+          milliamphour_in += a;
+          milliamphour_in_lifetime += a;
+          daily_milliamphour_in += a;
         }
       }
     }
@@ -1758,8 +1779,6 @@ void loop()
         max_soc_reset_counter = soc_reset_counter;
         ResetChargeEnergyRegisters();
         last_charge_coulombs = 0;
-        // milliamphour_in = 0;
-        // milliamphour_out = 0;
         soc_reset_counter = 0;
         SetSOC(10000);
       }

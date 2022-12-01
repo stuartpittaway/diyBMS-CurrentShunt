@@ -20,10 +20,10 @@ All registers are read only, unless also specified in "Write Registers" later on
 |40010|Various status flags (see below)
 |40011|Power (4 byte double)
 |40012|Power
-|40013|Shunt mV (4 byte double)
-|40014|Shunt mV
-|40015|CURRENT_LSB (4 byte double)
-|40016|CURRENT_LSB
+|40013|Daily milliamphour_out (4 byte unsigned long uint32_t)
+|40014|Daily milliamphour_out (4 byte unsigned long uint32_t)
+|40015|Daily milliamphour_in (4 byte  unsigned long uint32_t)
+|40016|Daily milliamphour_in
 |40017|shunt_resistance (4 byte double)
 |40018|shunt_resistance
 |40019|shunt_max_current  (unsigned int16)
@@ -71,9 +71,11 @@ All registers are read only, unless also specified in "Write Registers" later on
 
 |Register|Description|Example|
 |--------|-----------|-------|
-|40005/40006|amphour_out|Set to zero to reset
-|40007/40008|amphour_in|Set to zero to reset
 |40010|Watchdog timer trigger count (like error counter) (unsigned int16)|
+|40013|Daily milliamphour_out/reset to zero
+|40014|Daily milliamphour_out/reset to zero
+|40015|Daily milliamphour_in/reset to zero
+|40016|Daily milliamphour_in/reset to zero
 |40019|shunt_max_current  (unsigned int16) |e.g. 150
 |40020|shunt_millivolt  (unsigned int16) |e.g. 50
 |40021/40022|Battery Capacity (ah)  (unsigned int16)
