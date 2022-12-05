@@ -663,15 +663,15 @@ bool SetRegister(uint16_t address, uint16_t value)
   }
 
   // Allow reset of daily AH counters to ZERO
+  case 12:
   case 13:
-  case 14:
   {
     // Daily milliamphour_out (4 byte unsigned long uint32_t)
     daily_milliamphour_out = 0;
     break;
   }
+  case 14:
   case 15:
-  case 16:
   {
     // Daily milliamphour_in (4 byte  unsigned long uint32_t)
     daily_milliamphour_in = 0;
@@ -1322,14 +1322,12 @@ uint16_t ReadHoldingRegister(uint16_t address)
     return (int16_t)DieTemperature();
     break;
   }
-
   case 9:
   {
     // Various flags
     return bitFlags();
     break;
   }
-
   case 10:
   {
     // Power
@@ -1337,47 +1335,43 @@ uint16_t ReadHoldingRegister(uint16_t address)
     return p.word[0];
     break;
   }
-
   case 11:
   {
     // Power
     return p.word[1];
     break;
   }
-
   case 12:
   {
-    // milliamphour_out
+    // daily milliamphour_out
     return (uint16_t)(daily_milliamphour_out >> 16);
     break;
   }
   case 13:
   {
-    // milliamphour_out (low 16 bits)
+    // daily milliamphour_out (low 16 bits)
     return (uint16_t)daily_milliamphour_out;
     break;
   }
-
   case 14:
   {
-    // milliamphour_out
+    // daily milliamphour_out
     return (uint16_t)(daily_milliamphour_in >> 16);
     break;
   }
   case 15:
   {
-    // milliamphour_out (low 16 bits)
+    // daily milliamphour_out (low 16 bits)
     return (uint16_t)daily_milliamphour_in;
     break;
   }
-
   case 16:
   {
-    copy_shunt_resistance.dblvalue = registers.RSHUNT;
+    //Ohms to milliohm
+    copy_shunt_resistance.dblvalue = 1000*registers.RSHUNT;
     return copy_shunt_resistance.word[0];
     break;
   }
-
   case 17:
   {
     return copy_shunt_resistance.word[1];
