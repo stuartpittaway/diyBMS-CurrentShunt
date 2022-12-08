@@ -541,10 +541,6 @@ void SetSOC(uint16_t value)
   // Zero out readings using the offsets
   milliamphour_out_offset = milliamphour_out;
   milliamphour_in_offset = milliamphour_in;
-
-  // Reset the daily counters
-  daily_milliamphour_in = 0;
-  daily_milliamphour_out = 0;
 }
 
 void SetINA228Registers()
@@ -1115,6 +1111,10 @@ void setup()
 
     SetSOC(soc);
   }
+
+  // Reset the daily counters
+  daily_milliamphour_in = 0;
+  daily_milliamphour_out = 0;
 }
 
 // Bus voltage output. Two's complement value, however always positive.  Value in bits 23 to 4
@@ -1367,8 +1367,8 @@ uint16_t ReadHoldingRegister(uint16_t address)
   }
   case 16:
   {
-    //Ohms to milliohm
-    copy_shunt_resistance.dblvalue = 1000*registers.RSHUNT;
+    // Ohms to milliohm
+    copy_shunt_resistance.dblvalue = 1000 * registers.RSHUNT;
     return copy_shunt_resistance.word[0];
     break;
   }
