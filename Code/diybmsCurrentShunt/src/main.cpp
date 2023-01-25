@@ -431,7 +431,7 @@ int64_t i2c_readInt40(const uint8_t inareg)
   return (int64_t)reply;
 }
 
-// Read a 24 bit (3 byte) unsigned integer
+// Read a 24 bit (3 byte) unsigned integer into a uint32 (including right shift 4 bits)
 uint32_t readUInt24(const uint8_t inareg)
 {
   return i2c_readUint24(inareg) >> 4;
@@ -440,18 +440,21 @@ uint32_t readUInt24(const uint8_t inareg)
 // Read a 20 bit (3 byte) TWOS COMPLIMENT integer
 int32_t readInt20(const uint8_t inareg)
 {
-  uint32_t value = i2c_readUint24(inareg);
+  // Returns
+  uint32_t value = readUInt24(inareg);
 
-  // The number is two's complement, check for negative
-  if (value & 0x800000)
+  // The number is two's complement, check for negative at bit 20
+  if (value & 0x80000)
   {
-    // first 12 bits are set to 1, indicating negative number
-    value = (value >> 4) | 0xFFF00000;
+    // Invert
+    value = ~value;
+    // Trim to 20 bits
+    value = value & 0x000FFFFFU;
+    // Add 1
+    value = value + 1;
+    // Return NEGATIVE of the value
+    return -(int32_t)value;
   }
-  else
-  {
-    value = value >> 4;
-  } // if-then negative
 
   return (int32_t)value;
 }
@@ -1121,7 +1124,7 @@ double BusVoltage()
 {
   uint32_t busVoltage = readUInt24(INA_REGISTER::VBUS);
   // The accuracy is 20bits and 195.3125uV is the LSB
-  // Use integer math where possible
+  //Bus voltage output. Two's complement value, however always positive
   uint64_t busVoltage_mV = (uint64_t)busVoltage * 1953125 / 10000000; // conversion to get mV
   // Return VOLTS
   return (double)busVoltage_mV / (double)1000.0;
@@ -1132,7 +1135,7 @@ double ShuntVoltage()
 {
   // 78.125 nV/LSB when ADCRANGE = 1
   // Differential voltage measured across the shunt output. Two's complement value.
-  return (double)((uint64_t)readInt20(INA_REGISTER::VSHUNT) * 78125) / 1000000000.0;
+  return (double)((int64_t)readInt20(INA_REGISTER::VSHUNT) * 78125) / 1000000000.0;
 }
 
 // Energy in JOULES
