@@ -1036,81 +1036,80 @@ void setup()
 
     // By default, trigger relay on all alerts
     registers.relay_trigger_bitmap = ALL_ALERT_BITS;
-
-    // Flash LED to indicate normal boot up
-    for (size_t i = 0; i < 6; i++)
-    {
-      GreenLED(true);
-      if (wdt_triggered)
-      {
-        RedLED(true);
-      }
-      delay(50);
-      GreenLED(false);
-      if (wdt_triggered)
-      {
-        RedLED(false);
-      }
-      delay(150);
-    }
-
-    ReadJumperPins();
-
-    // Disable RS485 receiver (debug!)
-    // PORTB.OUTSET = PIN0_bm;
-    // PORTB.PIN0CTRL = 0;
-
-    ConfigureI2C();
-
-    // Serial uses PB2/PB3 and PB0 for XDIR
-    Serial.begin(ModBusBaudRate, MODBUSSERIALCONFIG);
-
-    // 0x01= Enables RS-485 mode with control of an external line driver through a dedicated Transmit Enable (TE) pin.
-    USART0.CTRLA |= B00000001;
-
-    wdt_triggered = false;
-
-    modbus_configure(&Serial, ModBusBaudRate);
-
-    // Default SOC% at 60%
-    uint16_t soc = 6000;
-
-    // We apply a "guestimate" to SoC based on voltage - not really accurate, but somewhere to start
-    // only applicable to 24V/48V (16S) setups. These voltages should be the unloaded (no current flowing) voltage.
-    // Assumption that its LIFEPO4 cells we are using
-    double v = BusVoltage();
-
-    if (v > 20 && v < 30)
-    {
-      // Scale up to use the 48V scale
-      v = v * 2;
-    }
-
-    if (v > 40 && v < 60)
-    {
-      // 16S LIFEPO4...
-      if (v >= 40.0)
-        soc = 500;
-      if (v >= 48.0)
-        soc = 900;
-      if (v >= 50.0)
-        soc = 1400;
-      if (v >= 51.2)
-        soc = 1700;
-      if (v >= 51.6)
-        soc = 2000;
-      if (v >= 52.0)
-        soc = 3000;
-      if (v >= 52.4)
-        soc = 4000;
-      if (v >= 52.8)
-        soc = 7000;
-      if (v >= 53.2)
-        soc = 9000;
-    }
-
-    SetSOC(soc);
   }
+  // Flash LED to indicate normal boot up
+  for (size_t i = 0; i < 6; i++)
+  {
+    GreenLED(true);
+    if (wdt_triggered)
+    {
+      RedLED(true);
+    }
+    delay(50);
+    GreenLED(false);
+    if (wdt_triggered)
+    {
+      RedLED(false);
+    }
+    delay(150);
+  }
+
+  ReadJumperPins();
+
+  // Disable RS485 receiver (debug!)
+  // PORTB.OUTSET = PIN0_bm;
+  // PORTB.PIN0CTRL = 0;
+
+  ConfigureI2C();
+
+  // Serial uses PB2/PB3 and PB0 for XDIR
+  Serial.begin(ModBusBaudRate, MODBUSSERIALCONFIG);
+
+  // 0x01= Enables RS-485 mode with control of an external line driver through a dedicated Transmit Enable (TE) pin.
+  USART0.CTRLA |= B00000001;
+
+  wdt_triggered = false;
+
+  modbus_configure(&Serial, ModBusBaudRate);
+
+  // Default SOC% at 60%
+  uint16_t soc = 6000;
+
+  // We apply a "guestimate" to SoC based on voltage - not really accurate, but somewhere to start
+  // only applicable to 24V/48V (16S) setups. These voltages should be the unloaded (no current flowing) voltage.
+  // Assumption that its LIFEPO4 cells we are using
+  double v = BusVoltage();
+
+  if (v > 20 && v < 30)
+  {
+    // Scale up to use the 48V scale
+    v = v * 2;
+  }
+
+  if (v > 40 && v < 60)
+  {
+    // 16S LIFEPO4...
+    if (v >= 40.0)
+      soc = 500;
+    if (v >= 48.0)
+      soc = 900;
+    if (v >= 50.0)
+      soc = 1400;
+    if (v >= 51.2)
+      soc = 1700;
+    if (v >= 51.6)
+      soc = 2000;
+    if (v >= 52.0)
+      soc = 3000;
+    if (v >= 52.4)
+      soc = 4000;
+    if (v >= 52.8)
+      soc = 7000;
+    if (v >= 53.2)
+      soc = 9000;
+  }
+
+  SetSOC(soc);
 
   // Reset the daily counters
   daily_milliamphour_in = 0;
