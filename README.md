@@ -94,7 +94,7 @@ For example a 200amp/50mV shunt:
 
 [![build-code](https://github.com/stuartpittaway/diyBMS-CurrentShunt/actions/workflows/build-code.yaml/badge.svg?branch=master)](https://github.com/stuartpittaway/diyBMS-CurrentShunt/actions/workflows/build-code.yaml)
 
-The board uses an ATTINY1614 chip, this requires an UPDI style of programmer, you can use an old Arduino style board to do this.  Take a look at [this](https://create.arduino.cc/projecthub/john-bradnam/create-your-own-updi-programmer-1e55f1).
+The board uses an ATTINY1614 chip, this requires an UPDI style of programmer, you can use an old Arduino style board to do this.  Take a look at [this](https://www.hackster.io/john-bradnam/create-your-own-updi-programmer-1e55f1) or [this](https://github.com/SpenceKonde/AVR-Guidance/blob/master/UPDI/jtag2updi.md).
 
 Source code is located in the [Code](Code) folder, and requires PLATFORM.IO to compile.
 
