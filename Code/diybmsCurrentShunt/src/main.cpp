@@ -1156,11 +1156,22 @@ int32_t ChargeInCoulombsAsInt()
   return registers.CURRENT_LSB * (double)i2c_readInt40(INA_REGISTER::CHARGE);
 }
 
+// Defined further down, next to the other register readers
+double Current();
+
 // Calculated power output.  Output value in watts. Unsigned representation. Positive value.
 double Power()
 {
-  // POWER Power [W] = 3.2 x CURRENT_LSB x POWER
-  return (double)i2c_readUint24(INA_REGISTER::POWER) * (double)3.2 * registers.CURRENT_LSB;
+  // https://github.com/stuartpittaway/diyBMSv4ESP32/issues/240
+  // The chip's own POWER register is specified against full scale rather than against the
+  // reading - PTME +-0.5% - so its error is a fixed number of watts, and it swamps a small
+  // reading.  diyBMSv4ESP32 issue 293 has 62.61V and 0.04A reported as 86.25W.
+  //
+  // Bus voltage and shunt voltage are specified against the reading, at +-0.05% gain, so
+  // their product is the better figure at every load, not just at small ones.
+  //
+  // fabs, not abs: abs() here is avr-libc's int abs(int), which would truncate 0.04A to 0.
+  return BusVoltage() * fabs(Current());
 }
 
 // The INA228 device has an internal temperature sensor which can measure die temperature from –40 °C to +125°C.
