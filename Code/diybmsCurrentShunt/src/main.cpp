@@ -1538,13 +1538,13 @@ uint16_t ReadHoldingRegister(uint16_t address)
   case 41:
   {
     // GITHUB version
-    return GIT_VERSION_B1;
+    return (uint16_t)(GIT_VERSION_SHORT >> 16);
     break;
   }
   case 42:
   {
     // GITHUB version
-    return GIT_VERSION_B2;
+    return (uint16_t)GIT_VERSION_SHORT;
     break;
   }
 
