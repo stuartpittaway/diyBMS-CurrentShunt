@@ -1,5 +1,4 @@
 """ Script for DIYBMS """
-import datetime
 import subprocess
 import os
 from os import path
@@ -43,37 +42,17 @@ with open(os.path.join(include_dir, 'EmbeddedFiles_Defines.h'), 'w') as f:
     f.write("// DO NOT CHECK THIS INTO SOURCE CONTROL\n")
     f.write("\n\n#ifndef EmbeddedFiles_Defines_H\n#define EmbeddedFiles_Defines_H\n\n")
 
-    f.write("const char GIT_VERSION[] = \"")
+    # The abbreviated hash, as a number.  The first eight characters, not the last: git
+    # resolves an abbreviation by prefix, so "git show 2d02d123" on a suffix finds nothing.
+    f.write("const uint32_t GIT_VERSION_SHORT = 0x")
     if (git_sha != None):
-        f.write(git_sha)
-    else:
-        f.write("LocalCompile")
-    f.write("\";\n\n")
-
-    f.write("const uint16_t GIT_VERSION_B1 = 0x")
-    if (git_sha != None):
-        f.write(git_sha[32:36])
+        f.write(git_sha[0:8])
     else:
         # Default for local compile
-        f.write("FFFF")
-    f.write(";\n\n")
+        f.write("FFFFFFFF")
+    f.write("UL;\n\n")
 
-    f.write("const uint16_t GIT_VERSION_B2 = 0x")
-    if (git_sha != None):
-        f.write(git_sha[36:])
-    else:
-        # Default for local compile
-        f.write("FFFF")
-    f.write(";\n\n")
-
-    # dt=datetime.datetime.utcnow()
-    dt=datetime.datetime.utcfromtimestamp(int(git_datetime))
-
-    f.write("const char COMPILE_DATE_TIME_UTC[] = \"")
-    f.write(dt.isoformat()[:-3]+'Z')
-    f.write("\";\n\n")
-
-    f.write("const uint32_t COMPILE_DATE_TIME_UTC_EPOCH = ")
+    f.write("const uint32_t COMMIT_DATE_TIME_UTC_EPOCH = ")
     f.write(git_datetime.__str__())
     f.write("UL;\n\n")
 

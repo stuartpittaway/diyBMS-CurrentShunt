@@ -1538,27 +1538,27 @@ uint16_t ReadHoldingRegister(uint16_t address)
   case 41:
   {
     // GITHUB version
-    return GIT_VERSION_B1;
+    return (uint16_t)(GIT_VERSION_SHORT >> 16);
     break;
   }
   case 42:
   {
     // GITHUB version
-    return GIT_VERSION_B2;
+    return (uint16_t)GIT_VERSION_SHORT;
     break;
   }
 
   case 43:
   {
-    // COMPILE_DATE_TIME_EPOCH
-    uint32_t x = COMPILE_DATE_TIME_UTC_EPOCH >> 16;
+    // COMMIT_DATE_TIME_EPOCH
+    uint32_t x = COMMIT_DATE_TIME_UTC_EPOCH >> 16;
     return (uint16_t)x;
     break;
   }
   case 44:
   {
-    // COMPILE_DATE_TIME_EPOCH
-    return (uint16_t)COMPILE_DATE_TIME_UTC_EPOCH;
+    // COMMIT_DATE_TIME_EPOCH
+    return (uint16_t)COMMIT_DATE_TIME_UTC_EPOCH;
     break;
   }
   case 45:
