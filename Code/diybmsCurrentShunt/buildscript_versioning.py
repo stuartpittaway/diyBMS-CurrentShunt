@@ -60,7 +60,7 @@ with open(os.path.join(include_dir, 'EmbeddedFiles_Defines.h'), 'w') as f:
         f.write("FFFF")
     f.write(";\n\n")
 
-    f.write("const uint32_t COMPILE_DATE_TIME_UTC_EPOCH = ")
+    f.write("const uint32_t COMMIT_DATE_TIME_UTC_EPOCH = ")
     f.write(git_datetime.__str__())
     f.write("UL;\n\n")
 
