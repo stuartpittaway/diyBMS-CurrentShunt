@@ -94,7 +94,6 @@ typedef union
   uint16_t word[2];
 } DoubleUnionType;
 
-const double full_scale_adc = 40.96;
 // const double CoulombsToAmpHours = 1.0 / 3600.0;
 const double CoulombsToMilliAmpHours = 1.0 / 3.6;
 const uint8_t INA228_I2C_Address = B1000000;
@@ -167,6 +166,54 @@ struct eeprom_regs
 };
 
 eeprom_regs registers;
+
+// ADC range, CONFIG bit 4 (ADCRANGE): 0 = +-163.84mV, 1 = +-40.96mV
+static bool NarrowADCRange() { return (registers.R_CONFIG & bit(4)) != 0; }
+
+// SOVL/SUVL LSB in volts: 5uV on the wide range, 1.25uV on the narrow one (INA228 datasheet)
+static double ShuntLimitLSB() { return NarrowADCRange() ? 1.25e-6 : 5e-6; }
+
+// Default calibration trim applied to SHUNT_CAL - losses seen in the current monitor circuit
+// design (or shunt resistance tolerance).  Can be changed through the controller's
+// "Calibration" value.
+const double DEFAULT_CALIBRATION_GAIN = 0.985;
+
+// SHUNT_CAL relative to the value equation 2 gives for the current CURRENT_LSB, RSHUNT and
+// range - the calibration trim, whichever way CURRENT_LSB was sized.
+static double CalibrationGain()
+{
+  double nominal = (NarrowADCRange() ? 4.0 : 1.0) * 13107.2e6 * registers.CURRENT_LSB * registers.RSHUNT;
+  return nominal > 0 ? registers.R_SHUNT_CAL / nominal : 0;
+}
+
+// Current threshold (amps) <-> SOVL/SUVL register (shunt volts in two's complement)
+static uint16_t ShuntLimitRegister(double amps)
+{
+  return (int16_t)constrain(lround(amps * registers.RSHUNT / ShuntLimitLSB()), -32767L, 32767L);
+}
+static double ShuntLimitAmps(uint16_t reg)
+{
+  return registers.RSHUNT > 0 ? (int16_t)reg * ShuntLimitLSB() / registers.RSHUNT : 0;
+}
+
+// Power limit (watts) -> PWR_LIMIT register, unsigned at 256 x the POWER LSB
+static uint16_t PowerLimitRegister(double watts)
+{
+  return (uint16_t)constrain(lround(watts / 256.0 / 3.2 / registers.CURRENT_LSB), 0L, 65535L);
+}
+
+// Keep SOVL/SUVL at the same shunt voltage when ADCRANGE changes (LSB changes by 4x).
+// The chip defaults 0x7FFF / 0x8000 mean "no limit", so leave those alone.
+static uint16_t RescaleShuntLimit(uint16_t reg, bool toNarrow)
+{
+  if (reg == 0x7FFF || reg == 0x8000)
+  {
+    return reg;
+  }
+  long v = (int16_t)reg;
+  v = toNarrow ? v * 4 : (v + (v < 0 ? -2 : 2)) / 4;
+  return (int16_t)constrain(v, -32767L, 32767L);
+}
 
 volatile bool ALERT_TRIGGERED = false;
 uint16_t alert = 0;
@@ -623,6 +670,10 @@ bool SetRegister(uint16_t address, uint16_t value)
     uint8_t flag2 = value;
 
     // Flag1 holds only 2 useful bits when setting
+    // Note the range and trim before they change
+    bool wasNarrow = NarrowADCRange();
+    double gain = CalibrationGain();
+
     // TempCompEnabled
     if ((flag1 & B00000010) != 0)
     {
@@ -645,6 +696,17 @@ bool SetRegister(uint16_t address, uint16_t value)
     {
       // 0h = ±163.84 mV
       registers.R_CONFIG &= ~bit(4);
+    }
+
+    if (wasNarrow != NarrowADCRange())
+    {
+      // Keep the limits at the same shunt voltage and the same calibration trim
+      registers.R_SOVL = RescaleShuntLimit(registers.R_SOVL, !wasNarrow);
+      registers.R_SUVL = RescaleShuntLimit(registers.R_SUVL, !wasNarrow);
+      CalculateLSB(gain);
+      // CHARGE was accumulated against the old CURRENT_LSB
+      ResetChargeEnergyRegisters();
+      last_charge_coulombs = 0;
     }
 
     // Flag2 bitmask can be applied directly to trigger_bitmap
@@ -679,15 +741,20 @@ bool SetRegister(uint16_t address, uint16_t value)
 
   case 18:
   {
+    // A different shunt starts again from the default calibration
     registers.shunt_max_current = value;
-    CalculateLSB();
+    CalculateLSB(DEFAULT_CALIBRATION_GAIN);
+    ResetChargeEnergyRegisters();
+    last_charge_coulombs = 0;
     break;
   }
   case 19:
   {
     // Register 40020
     registers.shunt_millivolt = value;
-    CalculateLSB();
+    CalculateLSB(DEFAULT_CALIBRATION_GAIN);
+    ResetChargeEnergyRegisters();
+    last_charge_coulombs = 0;
     break;
   }
 
@@ -728,15 +795,15 @@ bool SetRegister(uint16_t address, uint16_t value)
   case 27:
   {
     // Register 40028
-    // SHUNT_CAL register
-    registers.R_SHUNT_CAL = value;
+    // SHUNT_CAL register, 15 bits - bit 15 is reserved
+    registers.R_SHUNT_CAL = value & 0x7FFF;
     break;
   }
   case 28:
   {
-    // temperature limit
-    // Case unsigned to int16 to cope with negative temperatures
-    registers.R_TEMP_LIMIT = (int16_t)value / (double)0.0078125;
+    // temperature limit, two's complement at 7.8125m°C/LSB
+    // Through a signed integer - a negative double converted to uint16_t is undefined
+    registers.R_TEMP_LIMIT = (int16_t)constrain(lround((int16_t)value / 0.0078125), -32767L, 32767L);
     break;
   }
   case 30:
@@ -759,7 +826,7 @@ bool SetRegister(uint16_t address, uint16_t value)
   {
     // Shunt Over Voltage Limit (current limit)
     newvalue.word[1] = value;
-    registers.R_SOVL = (newvalue.dblvalue * 1000 / 1.25) * full_scale_adc / registers.shunt_max_current;
+    registers.R_SOVL = ShuntLimitRegister(newvalue.dblvalue);
 
     break;
   }
@@ -768,7 +835,7 @@ bool SetRegister(uint16_t address, uint16_t value)
   {
     // Shunt UNDER Voltage Limit (under current limit)
     newvalue.word[1] = value;
-    registers.R_SUVL = (newvalue.dblvalue * 1000 / 1.25) * full_scale_adc / registers.shunt_max_current;
+    registers.R_SUVL = ShuntLimitRegister(newvalue.dblvalue);
     break;
   }
 
@@ -776,7 +843,7 @@ bool SetRegister(uint16_t address, uint16_t value)
   {
     // Shunt Over POWER LIMIT
     newvalue.word[1] = value;
-    registers.R_PWR_LIMIT = (uint16_t)(newvalue.dblvalue / 256.0 / 3.2 / registers.CURRENT_LSB);
+    registers.R_PWR_LIMIT = PowerLimitRegister(newvalue.dblvalue);
     break;
   }
 
@@ -873,7 +940,7 @@ void ConfigureI2C()
 
   // Check MEMSTAT=1 which proves the INA chip is not corrupt
   diag_alrt_value = i2c_readword(INA_REGISTER::DIAG_ALRT);
-  if (diag_alrt_value & bit(DIAG_ALRT_FIELD::MEMSTAT) == 0)
+  if ((diag_alrt_value & bit(DIAG_ALRT_FIELD::MEMSTAT)) == 0)
   {
     // MEMSTAT
     // This bit is set to 0 if a checksum error is detected in the device trim memory space.
@@ -885,29 +952,49 @@ void ConfigureI2C()
   SetINA228Registers();
 }
 
-void CalculateLSB()
+// Calculate RSHUNT, CURRENT_LSB and SHUNT_CAL for the shunt and ADC range, applying a
+// calibration trim (gain, from CalibrationGain()).  A trim that is not a trim - further than
+// 20% from 1, such as zero or a value from a different scale - is replaced by the default.
+// The power limit is kept in watts.
+void CalculateLSB(double gain)
 {
-
   // Take a look at these for information on how it works!
   // https://dev.ti.com/gallery/view/4910879/INA228_229_237_238_239EVM_GUI/ver/2.0.0/
   // in above - click COG icon top left.
   // https://e2e.ti.com/support/amplifiers-group/amplifiers/f/amplifiers-forum/1034569/ina228-accumulated-energy-and-charge-is-wrong
 
-  // 150A/50mV shunt =   full_scale_current= 150.00A / 50.00 * 40.96 = 122.88 AMPS
-  //                     RSHUNT = (50 / 1000) / 150 = 0.00033333333
-  //                     CURRENT_LSB = 150/ 524288 = 0.000286102294921875
-  //                     R_SHUNT_CAL = 52428800000*0.000286102294921875*0.00033333333 = 4999.999 = 5000
+  // CURRENT is a 20-bit two's complement register, so it holds +-2^19 x CURRENT_LSB.  Size
+  // CURRENT_LSB to the current at the ADC full scale rather than to the shunt's rating,
+  // otherwise a current over the rating overflows CURRENT (MATHOF) although the ADC can
+  // still measure it.
+  //
+  //   CURRENT_LSB = (full scale volts / RSHUNT) / 2^19                (equation 3)
+  //   SHUNT_CAL   = 13107.2e6 x CURRENT_LSB x RSHUNT (x4 on 40.96mV)  (equation 2)
+  //               = 13107.2e6 x 0.16384 / 2^19 = 4 x 13107.2e6 x 0.04096 / 2^19 = 4096
+  //
+  // so the nominal SHUNT_CAL is 4096 for every shunt on either range.
+  // 150A/50mV shunt on 163.84mV: max measurable 491.52A, CURRENT_LSB 0.9375mA
 
-  // Calculate CURRENT_LSB and R_SHUNT_CAL values
-  // registers.full_scale_current = ((double)registers.shunt_max_current / (double)registers.shunt_millivolt) * full_scale_adc;
+  if (gain < 0.8 || gain > 1.2)
+  {
+    gain = DEFAULT_CALIBRATION_GAIN;
+  }
+
+  double watts = registers.R_PWR_LIMIT * 256.0 * 3.2 * registers.CURRENT_LSB;
+
+  if (registers.shunt_millivolt == 0 || registers.shunt_max_current == 0)
+  {
+    // Zero SHUNT_CAL makes the chip report zero current
+    registers.RSHUNT = 0;
+    registers.CURRENT_LSB = 0;
+    registers.R_SHUNT_CAL = 0;
+    return;
+  }
+
   registers.RSHUNT = ((double)registers.shunt_millivolt / 1000.0) / (double)registers.shunt_max_current;
-  registers.CURRENT_LSB = registers.shunt_max_current / (double)0x80000;
-  registers.R_SHUNT_CAL = 4L * (13107200000L * registers.CURRENT_LSB * registers.RSHUNT);
-
-  // Deliberately reduce calibration by 2.5%, which appears to be the loses seen in the current monitor circuit design
-  //(or shunt resistance tollerance)
-  // You can always configure this value through the web gui - "Calibration" value.
-  registers.R_SHUNT_CAL = ((uint32_t)registers.R_SHUNT_CAL * 985) / 1000;
+  registers.CURRENT_LSB = (NarrowADCRange() ? 0.04096 : 0.16384) / registers.RSHUNT / 524288.0;
+  registers.R_SHUNT_CAL = (uint16_t)lround(4096.0 * gain) & 0x7FFF;
+  registers.R_PWR_LIMIT = PowerLimitRegister(watts);
 
   /*
     // Hardcoded "good values" based on the dev.ti.com calculation
@@ -998,14 +1085,16 @@ void setup()
     // Conversion times for voltage, current  temperature
     // 128 times sample averaging
     // MODE  = 1111 = Continuous bus, shunt voltage and temperature
-    // VBUSCT= 111 = 6h = 4120µs BUS VOLT
-    //  VSHCT= 111 = 6h = 4120µs CURRENT
+    // VBUSCT= 111 = 7h = 4120µs BUS VOLT
+    //  VSHCT= 111 = 7h = 4120µs CURRENT
     //   VTCT= 010 = 2h =  150µs TEMPERATURE
     //    AVG= 100 = 4h = 128 ADC sample averaging count
     // B1111 111 111 010 100 = 0xFFD4
     registers.R_ADC_CONFIG = 0xFFD4;
 
-    registers.R_CONFIG = _BV(4); // ADCRANGE = 40.96mV scale
+    // ADCRANGE = 0 = 163.84mV scale, so every shunt reads its full rated current (on the
+    // 40.96mV scale a 150A/50mV shunt stops at 122.88A)
+    registers.R_CONFIG = 0;
 
     // Defaults for battery capacity/voltages
     registers.batterycapacity_amphour = 280;
@@ -1032,13 +1121,37 @@ void setup()
     registers.R_BUVL = 0;
     registers.R_TEMP_LIMIT = 0x2800; // 80 degrees C
 
-    CalculateLSB();
+    CalculateLSB(DEFAULT_CALIBRATION_GAIN);
 
     // Default Power limit = 5kW
-    registers.R_PWR_LIMIT = (uint16_t)((5000.0 / registers.CURRENT_LSB / 3.2) / 256.0); // 5kW
+    registers.R_PWR_LIMIT = PowerLimitRegister(5000.0);
 
     // By default, trigger relay on all alerts
     registers.relay_trigger_bitmap = ALL_ALERT_BITS;
+  }
+  else if (registers.shunt_max_current != 0 &&
+           fabs(registers.CURRENT_LSB * 524288.0 / registers.shunt_max_current - 1.0) < 1e-4)
+  {
+    // Configuration saved by earlier firmware, which sized CURRENT_LSB to the shunt's rating
+    // (shunt_max_current / 2^19) and defaulted to the 40.96mV range.  Move it to the
+    // 163.84mV range with CURRENT_LSB sized to the ADC, keeping the calibration trim and the
+    // current, voltage and power limits.  Afterwards CURRENT_LSB no longer matches this test.
+    double gain = CalibrationGain();
+    registers.R_CONFIG &= ~bit(4);
+    CalculateLSB(gain);
+
+    // Earlier firmware turned the current limits to and from SOVL/SUVL as if the shunt's
+    // rated current fell at 40.96mV, so a limit entered as 100A on a 50mV shunt tripped at
+    // 82A.  Set them to the current that was entered (and displayed).
+    uint16_t *limits[] = {&registers.R_SOVL, &registers.R_SUVL};
+    for (uint16_t *reg : limits)
+    {
+      if (*reg != 0x7FFF && *reg != 0x8000)
+      {
+        *reg = ShuntLimitRegister((int16_t)*reg * 1.25e-3 / 40.96 * registers.shunt_max_current);
+      }
+    }
+    config_dirty = true;
   }
   // Flash LED to indicate normal boot up
   for (size_t i = 0; i < 6; i++)
@@ -1133,9 +1246,9 @@ double BusVoltage()
 // Shunt voltage in MILLIVOLTS mV
 double ShuntVoltage()
 {
-  // 78.125 nV/LSB when ADCRANGE = 1
+  // 312.5 nV/LSB when ADCRANGE = 0, 78.125 nV/LSB when ADCRANGE = 1
   // Differential voltage measured across the shunt output. Two's complement value.
-  return (double)((int64_t)readInt20(INA_REGISTER::VSHUNT) * 78125) / 1000000000.0;
+  return (double)readInt20(INA_REGISTER::VSHUNT) * (NarrowADCRange() ? 78.125e-6 : 312.5e-6);
 }
 
 // Energy in JOULES
@@ -1156,11 +1269,22 @@ int32_t ChargeInCoulombsAsInt()
   return registers.CURRENT_LSB * (double)i2c_readInt40(INA_REGISTER::CHARGE);
 }
 
+// Defined further down, next to the other register readers
+double Current();
+
 // Calculated power output.  Output value in watts. Unsigned representation. Positive value.
 double Power()
 {
-  // POWER Power [W] = 3.2 x CURRENT_LSB x POWER
-  return (double)i2c_readUint24(INA_REGISTER::POWER) * (double)3.2 * registers.CURRENT_LSB;
+  // https://github.com/stuartpittaway/diyBMSv4ESP32/issues/240
+  // The chip's own POWER register is specified against full scale rather than against the
+  // reading - PTME +-0.5% - so its error is a fixed number of watts, and it swamps a small
+  // reading.  diyBMSv4ESP32 issue 293 has 62.61V and 0.04A reported as 86.25W.
+  //
+  // Bus voltage and shunt voltage are specified against the reading, at +-0.05% gain, so
+  // their product is the better figure at every load, not just at small ones.
+  //
+  // fabs, not abs: abs() here is avr-libc's int abs(int), which would truncate 0.04A to 0.
+  return BusVoltage() * fabs(Current());
 }
 
 // The INA228 device has an internal temperature sensor which can measure die temperature from –40 °C to +125°C.
@@ -1474,10 +1598,7 @@ uint16_t ReadHoldingRegister(uint16_t address)
   case 33:
   {
     // Shunt Over Voltage Limit (current limit)
-    int16_t value = i2c_readword(INA_REGISTER::SOVL);
-
-    // 1.25 µV/LSB
-    ShuntOverCurrentLimit.dblvalue = ((double)value / 1000 * 1.25) / full_scale_adc * registers.shunt_max_current;
+    ShuntOverCurrentLimit.dblvalue = ShuntLimitAmps(i2c_readword(INA_REGISTER::SOVL));
 
     return ShuntOverCurrentLimit.word[0];
     break;
@@ -1490,9 +1611,7 @@ uint16_t ReadHoldingRegister(uint16_t address)
   case 35:
   {
     // Shunt UNDER Voltage Limit (under current limit)
-    int16_t value = i2c_readword(INA_REGISTER::SUVL);
-
-    ShuntUnderCurrentLimit.dblvalue = ((double)value / 1000 * 1.25) / full_scale_adc * registers.shunt_max_current;
+    ShuntUnderCurrentLimit.dblvalue = ShuntLimitAmps(i2c_readword(INA_REGISTER::SUVL));
 
     return ShuntUnderCurrentLimit.word[0];
     break;
